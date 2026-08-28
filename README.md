@@ -1,4 +1,9 @@
 # SageAttention
+
+PPU INT8 forward support through the actlize backend is documented in
+[`docs/PPU_INT8_PORT.md`](docs/PPU_INT8_PORT.md).  It uses a separate PPU
+source graph; NVIDIA inline-PTX translation is intentionally not part of the
+port.
 <!-- We are continuously updating more features. You could **Star** and **Watch** our repository to stay updated.
 
 --- -->

@@ -1,0 +1,2 @@
+[PPU Sage layout] c_formula_bad=0/512 transposed_formula_bad=240/256 row_peer_bad=0 bridge_bad=0/256 old_order_bad=240/256
+[PPU Sage layout] PASS: real traits + row peers + C-to-A bridge

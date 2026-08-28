@@ -44,6 +44,13 @@ try:
 except:
     SM90_ENABLED = False
 
+try:
+    from . import ppu_compile
+    PPU_ENABLED = True
+except ImportError:
+    ppu_compile = None
+    PPU_ENABLED = False
+
 from .quant import per_block_int8 as per_block_int8_cuda
 from .quant import per_warp_int8 as per_warp_int8_cuda
 from .quant import sub_mean
@@ -140,6 +147,12 @@ def sageattn(
     - All tensors must be on the same cuda device.
     """
         
+    if PPU_ENABLED:
+        return sageattn_qk_int8_pv_fp16_ppu(
+            q, k, v, tensor_layout=tensor_layout, is_causal=is_causal,
+            sm_scale=sm_scale, return_lse=return_lse, **kwargs
+        )
+
     arch = get_cuda_arch_versions()[q.device.index]
     if arch == "sm80":
         return sageattn_qk_int8_pv_fp16_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32")
@@ -155,6 +168,102 @@ def sageattn(
         return sageattn_qk_int8_pv_fp8_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, qk_quant_gran="per_warp", sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp16") # sm121 has accurate fp32 accumulator for fp8 mma and triton kernel is currently not usable on sm121.
     else:
         raise ValueError(f"Unsupported CUDA architecture: {arch}")
+
+
+def sageattn_qk_int8_pv_fp16_ppu(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    tensor_layout: str = "HND",
+    is_causal: bool = False,
+    sm_scale: Optional[float] = None,
+    smooth_k: bool = True,
+    return_lse: bool = False,
+    **kwargs: Any,
+):
+    """Actlize-backed PPU QK-int8 / PV-fp16 SageAttention forward."""
+    if not PPU_ENABLED:
+        raise RuntimeError("PPU SageAttention extension is not installed")
+    if kwargs:
+        unsupported = ", ".join(sorted(kwargs))
+        raise TypeError(
+            f"Unsupported PPU SageAttention option(s): {unsupported}. "
+            "The first PPU path does not silently ignore masks or backend knobs."
+        )
+    if q.dtype not in (torch.float16, torch.bfloat16):
+        raise TypeError("PPU SageAttention Q/K/V must be fp16 or bf16")
+    if q.device != k.device or q.device != v.device:
+        raise ValueError("PPU SageAttention Q/K/V must share one device")
+    if q.dtype != k.dtype or q.dtype != v.dtype:
+        raise TypeError("PPU SageAttention Q/K/V dtypes must match")
+    if tensor_layout not in ("HND", "NHD"):
+        raise ValueError("tensor_layout must be HND or NHD")
+
+    torch.cuda.set_device(v.device)
+    original_head_dim = q.size(-1)
+    if original_head_dim <= 64:
+        padded_head_dim = 64
+    elif original_head_dim <= 128:
+        padded_head_dim = 128
+    else:
+        raise ValueError(f"Unsupported PPU head_dim: {original_head_dim}")
+    if original_head_dim != padded_head_dim:
+        pad = (0, padded_head_dim - original_head_dim)
+        q = F.pad(q, pad)
+        k = F.pad(k, pad)
+        v = F.pad(v, pad)
+    if q.stride(-1) != 1 or k.stride(-1) != 1 or v.stride(-1) != 1:
+        raise ValueError("PPU SageAttention requires contiguous head dimension")
+
+    layout = 0 if tensor_layout == "NHD" else 1
+    seq_dim = 1 if layout == 0 else 2
+    head_dim = 2 if layout == 0 else 1
+    qo_len = q.size(seq_dim)
+    kv_len = k.size(seq_dim)
+    q_heads = q.size(head_dim)
+    kv_heads = k.size(head_dim)
+    if kv_heads == 0 or q_heads % kv_heads != 0:
+        raise ValueError("query heads must be divisible by key/value heads")
+    if is_causal and qo_len != kv_len:
+        raise ValueError(
+            "the first PPU causal path requires equal query and key lengths"
+        )
+    if sm_scale is None:
+        sm_scale = original_head_dim ** -0.5
+
+    km = k.mean(dim=seq_dim) if smooth_k else None
+    if km is not None:
+        km_broadcast = torch.repeat_interleave(
+            km, q_heads // kv_heads, dim=1
+        ) if q_heads != kv_heads else km
+        if return_lse:
+            if tensor_layout == "NHD":
+                correction = torch.matmul(
+                    q.transpose(1, 2), km_broadcast.unsqueeze(-1)
+                ).squeeze(-1).float()
+            else:
+                correction = torch.matmul(
+                    q, km_broadcast.unsqueeze(-1)
+                ).squeeze(-1).float()
+    else:
+        correction = None
+
+    q_int8, q_scale, k_int8, k_scale = ppu_compile.quant_per_warp_int8(
+        q, k, km, tensor_layout=tensor_layout
+    )
+    v_fp16 = v.to(torch.float16)
+    output = torch.empty(q.shape, dtype=q.dtype, device=q.device)
+    lse = ppu_compile.qk_int8_sv_f16_accum_f32_attn(
+        q_int8, k_int8, v_fp16, output, q_scale, k_scale,
+        layout, int(is_causal), 2, float(sm_scale), int(return_lse)
+    )
+    output = output[..., :original_head_dim]
+    if return_lse:
+        lse = lse / 1.4426950408889634
+        if correction is not None:
+            lse = lse + correction * sm_scale
+        return output, lse
+    return output
 
 
 def sageattn_qk_int8_pv_fp16_triton(
