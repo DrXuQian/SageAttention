@@ -79,7 +79,7 @@ PY
 # the compiler actually initialized all four hardware accumulator registers.
 probe_includes=(
   "-I$repo/csrc/qattn/ppu"
-  "-I$repo/csrc/actlize/include"
+  "-I$repo/third_party/actlize/include"
   "-I$sdk/include"
 )
 for target_include in "$sdk"/targets/*/include; do

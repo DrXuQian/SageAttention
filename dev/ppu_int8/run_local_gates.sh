@@ -17,7 +17,7 @@ fi
 
 base=("$nvcc_bin" -std=c++17 -arch=sm_80 -x cu
       -I "$repo/dev/ppu_int8/stub_inc"
-      -I "$repo/csrc/actlize/include")
+      -I "$repo/third_party/actlize/include")
 "${base[@]}" -o "$out/layout-oracle" "$repo/dev/ppu_int8/layout_oracle.cu"
 "$out/layout-oracle" | tee "$out/layout-oracle.log"
 diff -u "$repo/dev/ppu_int8/layout_oracle.expected.txt" \
@@ -60,7 +60,7 @@ print(f"{CUDA_HOME}/include")
 PY
 )
 front_inc=(-I "$repo/dev/ppu_int8/stub_inc"
-           -I "$repo/csrc/actlize/include"
+           -I "$repo/third_party/actlize/include"
            -I "$repo/csrc/qattn/ppu")
 for path in "${torch_includes[@]}"; do front_inc+=(-I "$path"); done
 front=("$nvcc_bin" -std=c++17 -arch=sm_80 --expt-relaxed-constexpr

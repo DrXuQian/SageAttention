@@ -66,7 +66,7 @@ def main() -> int:
     layout = (ROOT / "csrc/qattn/ppu/attn_ppu_layout.cuh").read_text()
     setup = (ROOT / "setup_ppu.py").read_text()
     mma_arch = (
-        ROOT / "csrc/actlize/include/cute/arch/mma_ppu0010.hpp"
+        ROOT / "third_party/actlize/include/cute/arch/mma_ppu0010.hpp"
     ).read_text()
     if args.plant == "bridge-order":
         ops = ops.replace(

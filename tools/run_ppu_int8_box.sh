@@ -11,7 +11,7 @@ sha="$(git -C "$repo" rev-parse HEAD)"
 out="${OUT:-/workspace/sageattention-ppu-int8-${sha:0:8}-$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -p "$out/build-temp"
 printf '[PPU Sage box] sha=%s actlize=%s out=%s\n' \
-  "$sha" "$(git -C "$repo/csrc/actlize" rev-parse HEAD)" "$out"
+  "$sha" "$(git -C "$repo/third_party/actlize" rev-parse HEAD)" "$out"
 
 # The host CuTe proof is generated on a complete NVIDIA CUDA toolchain.  The
 # PPU box consumes evidence from this exact result SHA; it does not rerun the

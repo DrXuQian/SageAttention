@@ -25,10 +25,11 @@ if not HGCC.is_file():
     raise RuntimeError(f"hgcc not found at {HGCC}")
 os.environ["PATH"] = f"{HGCC.parent}:{os.environ.get('PATH', '')}"
 
-ACTLIZE = ROOT / "csrc" / "actlize"
+ACTLIZE = ROOT / "third_party" / "actlize"
 if not (ACTLIZE / "include" / "cute" / "tensor.hpp").is_file():
     raise RuntimeError(
-        "actlize submodule is missing; run: git submodule update --init csrc/actlize"
+        "actlize submodule is missing; run: "
+        "git submodule update --init third_party/actlize"
     )
 SDK_INCLUDE = Path(PPU_SDK) / "include"
 TARGET_INCLUDES = sorted((Path(PPU_SDK) / "targets").glob("*/include"))
