@@ -4,3 +4,11 @@ from .core import sageattn_qk_int8_pv_fp16_cuda
 from .core import sageattn_qk_int8_pv_fp8_cuda
 from .core import sageattn_qk_int8_pv_fp8_cuda_sm90
 from .core import sageattn_qk_int8_pv_fp16_ppu
+from .ppu_sparse import (
+    SparseAttentionPlan,
+    make_h3_topk_plan,
+    make_sol_plan,
+    sageattn_block_sparse_ppu,
+    sageattn_h3_topk_ppu,
+    sageattn_sol_ppu,
+)

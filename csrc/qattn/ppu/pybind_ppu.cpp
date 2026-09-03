@@ -11,6 +11,10 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
       &qk_int8_sv_f16_accum_f32_attn_ppu,
       "PPU QK-int8 / PV-fp16 SageAttention with FP32 accumulation");
   module.def(
+      "qk_int8_sv_f16_block_sparse_accum_f32_attn",
+      &qk_int8_sv_f16_block_sparse_accum_f32_attn_ppu,
+      "PPU block-sparse QK-int8 / PV-fp16 SageAttention");
+  module.def(
       "quant_per_warp_int8",
       &quant_per_warp_int8_ppu,
       "PPU per-warp INT8 quantization for Q");

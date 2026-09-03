@@ -94,3 +94,88 @@ def _qk_int8_sv_f16_accum_f32_attn_fake(
             (batch, heads, qo_len), device=query.device, dtype=torch.float32
         )
     return torch.empty((0,), device=query.device, dtype=torch.float32)
+
+
+@torch.library.custom_op(
+    "sageattention::qk_int8_sv_f16_block_sparse_accum_f32_attn_ppu",
+    mutates_args=("output",),
+    device_types="cuda",
+)
+def qk_int8_sv_f16_block_sparse_accum_f32_attn(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    query_fp16: torch.Tensor,
+    output: torch.Tensor,
+    query_scale: torch.Tensor,
+    key_scale: torch.Tensor,
+    exact_row_ptr: torch.Tensor,
+    exact_kv64: torch.Tensor,
+    selected_route_bits: torch.Tensor,
+    key_mean: torch.Tensor,
+    value_mean: torch.Tensor,
+    log2_block_counts: torch.Tensor,
+    tensor_layout: int,
+    query_block: int,
+    route_block: int,
+    use_summary: int,
+    sm_scale: float,
+    return_lse: int,
+) -> torch.Tensor:
+    return _qattn_ppu.qk_int8_sv_f16_block_sparse_accum_f32_attn(
+        query,
+        key,
+        value,
+        query_fp16,
+        output,
+        query_scale,
+        key_scale,
+        exact_row_ptr,
+        exact_kv64,
+        selected_route_bits,
+        key_mean,
+        value_mean,
+        log2_block_counts,
+        tensor_layout,
+        query_block,
+        route_block,
+        use_summary,
+        sm_scale,
+        return_lse,
+    )
+
+
+@torch.library.register_fake(
+    "sageattention::qk_int8_sv_f16_block_sparse_accum_f32_attn_ppu"
+)
+def _qk_int8_sv_f16_block_sparse_accum_f32_attn_fake(
+    query,
+    key,
+    value,
+    query_fp16,
+    output,
+    query_scale,
+    key_scale,
+    exact_row_ptr,
+    exact_kv64,
+    selected_route_bits,
+    key_mean,
+    value_mean,
+    log2_block_counts,
+    tensor_layout,
+    query_block,
+    route_block,
+    use_summary,
+    sm_scale,
+    return_lse,
+):
+    if return_lse:
+        batch = query.size(0)
+        if tensor_layout == 0:
+            qo_len, heads = query.size(1), query.size(2)
+        else:
+            heads, qo_len = query.size(1), query.size(2)
+        return torch.empty(
+            (batch, heads, qo_len), device=query.device, dtype=torch.float32
+        )
+    return torch.empty((0,), device=query.device, dtype=torch.float32)

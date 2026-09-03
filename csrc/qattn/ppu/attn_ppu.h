@@ -16,6 +16,27 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
     float softmax_scale,
     int return_lse);
 
+torch::Tensor qk_int8_sv_f16_block_sparse_accum_f32_attn_ppu(
+    torch::Tensor query,
+    torch::Tensor key,
+    torch::Tensor value,
+    torch::Tensor query_fp16,
+    torch::Tensor output,
+    torch::Tensor query_scale,
+    torch::Tensor key_scale,
+    torch::Tensor exact_row_ptr,
+    torch::Tensor exact_kv64,
+    torch::Tensor selected_route_bits,
+    torch::Tensor key_mean,
+    torch::Tensor value_mean,
+    torch::Tensor log2_block_counts,
+    int tensor_layout,
+    int query_block,
+    int route_block,
+    int use_summary,
+    float softmax_scale,
+    int return_lse);
+
 void quant_per_warp_int8_ppu(
     torch::Tensor input,
     torch::Tensor output,
