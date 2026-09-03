@@ -46,13 +46,20 @@ private-memory traffic, but it is not hidden as `spill=0` either.
 
 ## Admission
 
-Host admission proves plan algebra independently of the device executor:
+Host admission proves plan algebra independently of the device executor.  It
+also runs three expected-red identity mutations and rejects any box runner
+that contains a compiler, linker, or disassembler entry point:
 
 ```bash
 bash dev/ppu_sparse/run_local_gates.sh
 ```
 
-The PPU box runner builds the real `-arch=ppu_10` source graph and then requires:
+The checked-in PPU extension is compiled locally from the real `-arch=ppu_10`
+source graph.  Its manifest binds the binary hash to the source hashes,
+actlize revision, Python/Torch ABI, SDK release, and the locally measured
+resource census.  The box runner is execution-only: it verifies that identity,
+copies the prebuilt extension into the package, and never invokes `hgcc`,
+`build_ext`, or a disassembler.  It then requires:
 
 1. full-density Q128 CSR is raw-bit identical to dense PPU SageAttention;
 2. full-density Q64 CSR is raw-bit identical to the same dense path;
@@ -66,6 +73,10 @@ The PPU box runner builds the real `-arch=ppu_10` source graph and then requires
 OUT=/workspace/sageattention-ppu-sparse-run \
   bash tools/run_ppu_sparse_box.sh
 ```
+
+`PPU_RUNTIME_DIR` may override the default `/usr/local/PPU_SDK/lib`; it names
+runtime libraries only and is not a compiler path.  A source, ABI, submodule,
+or binary mismatch fails before any device launch.
 
 Performance output keeps three costs separate: planner, prequantized sparse
 core, and preplanned quantization-plus-core.  The current Python/Torch Sol

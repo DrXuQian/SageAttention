@@ -5,13 +5,15 @@ repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sha="$(git -C "$repo" rev-parse HEAD)"
 out="${OUT:-/workspace/sageattention-ppu-perf-${sha:0:8}-$(date -u +%Y%m%dT%H%M%SZ)}"
 artifact="$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1/_qattn_ppu.cpython-312-x86_64-linux-gnu.so"
-runtime_dir="${PPU_SDK:-/usr/local/PPU_SDK}/lib"
+manifest="$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1/manifest.json"
+runtime_dir="${PPU_RUNTIME_DIR:-${PPU_SDK:-${PPU_HOME:-/usr/local/PPU_SDK}}/lib}"
 mkdir -p "$out"
 
-if [[ ! -f "$artifact" ]]; then
-  echo "[PPU Sage perf runner] FAIL: prebuilt extension missing: $artifact" >&2
-  exit 1
-fi
+python "$repo/tools/verify_ppu_prebuilt.py" \
+  --repo "$repo" --manifest "$manifest" --artifact "$artifact" \
+  --runtime-dir "$runtime_dir" \
+  --json-out "$out/prebuilt-identity.json" \
+  2>&1 | tee "$out/prebuilt-identity.log"
 cp -f "$artifact" "$repo/sageattention/"
 sha256sum "$artifact" | tee "$out/binary.sha256"
 printf '[PPU Sage perf runner] sha=%s out=%s runtime=%s\n' \

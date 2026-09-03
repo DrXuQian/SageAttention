@@ -2,16 +2,22 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-sdk="${PPU_SDK:-${PPU_HOME:-}}"
-if [[ -z "$sdk" || ! -x "$sdk/bin/hgcc" ]]; then
-  echo '[PPU Sage box] FAIL: set PPU_SDK to an SDK containing bin/hgcc' >&2
-  exit 1
-fi
 sha="$(git -C "$repo" rev-parse HEAD)"
 out="${OUT:-/workspace/sageattention-ppu-int8-${sha:0:8}-$(date -u +%Y%m%dT%H%M%SZ)}"
-mkdir -p "$out/build-temp"
-printf '[PPU Sage box] sha=%s actlize=%s out=%s\n' \
-  "$sha" "$(git -C "$repo/third_party/actlize" rev-parse HEAD)" "$out"
+prebuilt_dir="$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1"
+manifest="$prebuilt_dir/manifest.json"
+extension="$prebuilt_dir/_qattn_ppu.cpython-312-x86_64-linux-gnu.so"
+runtime_dir="${PPU_RUNTIME_DIR:-${PPU_SDK:-${PPU_HOME:-/usr/local/PPU_SDK}}/lib}"
+mkdir -p "$out"
+printf '[PPU Sage box] mode=EXECUTION-ONLY sha=%s actlize=%s runtime=%s out=%s\n' \
+  "$sha" "$(git -C "$repo" rev-parse HEAD:third_party/actlize)" \
+  "$runtime_dir" "$out"
+
+python "$repo/tools/verify_ppu_prebuilt.py" \
+  --repo "$repo" --manifest "$manifest" --artifact "$extension" \
+  --runtime-dir "$runtime_dir" \
+  --json-out "$out/prebuilt-identity.json" \
+  2>&1 | tee "$out/prebuilt-identity.log"
 
 # The host CuTe proof is generated on a complete NVIDIA CUDA toolchain.  The
 # PPU box consumes evidence from this exact result SHA; it does not rerun the
@@ -25,21 +31,10 @@ grep -Fqx '[PPU Sage layout] PASS: real traits + row peers + C-to-A bridge' \
   "$out/layout-oracle.committed.txt"
 printf '[PPU Sage box] host_layout_evidence=COMMITTED/PASS fresh_box_execution=0\n'
 
-export PPU_SDK="$sdk"
-export PATH="$sdk/bin:$PATH"
-(
-  cd "$repo"
-  python setup_ppu.py build_ext --inplace --force \
-    --build-temp "$out/build-temp"
-) 2>&1 | tee "$out/build.log"
-
-extension="$(find "$repo/sageattention" -maxdepth 1 -type f \
-  -name '_qattn_ppu*.so' -print -quit)"
-if [[ -z "$extension" ]]; then
-  echo '[PPU Sage box] FAIL: build produced no _qattn_ppu extension' >&2
-  exit 1
-fi
+cp -f "$extension" "$repo/sageattention/"
 sha256sum "$extension" | tee "$out/binary.sha256"
+export LD_LIBRARY_PATH="$runtime_dir:${LD_LIBRARY_PATH:-}"
+export PYTHONPATH="$repo"
 (
   cd "$repo"
   python dev/ppu_int8/device_smoke.py
