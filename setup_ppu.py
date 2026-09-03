@@ -6,11 +6,13 @@ the PPU source graph rather than compile everything and hope unused PTX drops.
 """
 
 import os
+import subprocess
+import sysconfig
 from pathlib import Path
 
 import torch
 from setuptools import find_packages, setup
-from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+import torch.utils.cpp_extension as torch_cpp_extension
 
 
 ROOT = Path(__file__).resolve().parent
@@ -22,7 +24,6 @@ HGCC = Path(PPU_SDK) / "bin" / "hgcc"
 if not HGCC.is_file():
     raise RuntimeError(f"hgcc not found at {HGCC}")
 os.environ["PATH"] = f"{HGCC.parent}:{os.environ.get('PATH', '')}"
-os.environ.setdefault("PYTORCH_NVCC", str(HGCC))
 
 ACTLIZE = ROOT / "csrc" / "actlize"
 if not (ACTLIZE / "include" / "cute" / "tensor.hpp").is_file():
@@ -40,40 +41,97 @@ if not SDK_INCLUDE.is_dir() or not TARGET_INCLUDES:
 ABI = 1 if torch._C._GLIBCXX_USE_CXX11_ABI else 0
 CXX_FLAGS = ["-O3", "-std=c++17", f"-D_GLIBCXX_USE_CXX11_ABI={ABI}"]
 HGCC_FLAGS = [
-    "-O3",
-    "-std=c++17",
-    "-U__CUDA_NO_HALF_OPERATORS__",
-    "-U__CUDA_NO_HALF_CONVERSIONS__",
-    "-U__CUDA_NO_HALF2_OPERATORS__",
-    "-U__CUDA_NO_BFLOAT16_CONVERSIONS__",
+    "--forward-unknown-to-host-compiler",
+    "--forward-unknown-to-host-linker",
+    "-arch=ppu_10",
+    "-x", "hg",
+    "-DSWITCH_TO_HGGCRT",
+    "-Xcompiler", "-ftemplate-depth=8192",
+    "-Xllvm", "-wno-loop-miss-transform",
+    "-Xllvm", "-ppu-simt-branch=false",
+    "-Xllvm", "-ppu-patch-fence-ppu=false",
+    "-Xllvm", "-ppu-cg-to-kp1=true",
+    "-Xllvm", "-ppu-fix-uninit=true",
+    "-Xllvm", "-ppu-max-vreg-count=256",
+    "-Xllvm", "-ppu-sink-matrix-addr=true",
+    "-Xllvm", "-ppu-sink-async-addr=true",
+    "-Xllvm", "-ppu-sink-load-addr=true",
+    "-Xllvm", "-ppu-sink-store-addr=true",
     "--expt-relaxed-constexpr",
-    "--expt-extended-lambda",
-    "--use_fast_math",
-    "-mllvm", "-ppu-max-vreg-count=256",
-    "-mllvm", "-ppu-sink-matrix-addr=true",
-    "-mllvm", "-ppu-sink-async-addr=true",
-    "-mllvm", "-ppu-sink-load-addr=true",
-    "-mllvm", "-ppu-sink-store-addr=true",
+    "-DUSE_CLANG",
+    "-DCUTLASS_VERSIONS_GENERATED",
+    "-DCUTLASS_USE_PACKED_TUPLE=1",
+    "-DCUTE_USE_PACKED_TUPLE=1",
     "-DUSE_PPU=1",
     "-DUSE_AIU=1",
     f"-D_GLIBCXX_USE_CXX11_ABI={ABI}",
-    "-arch=ppu_10",
+    "-O3",
+    "-std=c++17",
+    "--use_fast_math",
+    "-fPIC",
 ]
 
-extension = CUDAExtension(
+DEVICE_SOURCES = [
+    ROOT / "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu",
+    ROOT / "csrc/qattn/ppu/quant_ppu.cu",
+]
+DEVICE_INCLUDES = [
+    ROOT / "csrc" / "qattn" / "ppu",
+    ACTLIZE / "include",
+    SDK_INCLUDE,
+    *TARGET_INCLUDES,
+    Path(sysconfig.get_paths()["include"]),
+    *[Path(path) for path in torch_cpp_extension.include_paths()],
+]
+PPU_LIB = Path(PPU_SDK) / "lib"
+PPU_LIBRARIES = ["hggc_wrapper", "hggcrt1", "hggc", "hg_wrapper"]
+for library in PPU_LIBRARIES:
+    if not (PPU_LIB / f"lib{library}.so").is_file():
+        raise RuntimeError(f"PPU runtime library is missing: {PPU_LIB}/lib{library}.so")
+
+
+class PpuBuildExtension(torch_cpp_extension.BuildExtension):
+    """Compile PPU device TUs with hgcc, then use the host linker for pybind."""
+
+    def build_extensions(self):
+        object_dir = Path(self.build_temp) / "ppu_obj"
+        object_dir.mkdir(parents=True, exist_ok=True)
+        device_objects = []
+        include_flags = [f"-I{path}" for path in DEVICE_INCLUDES]
+        for source in DEVICE_SOURCES:
+            output = object_dir / f"{source.stem}.o"
+            command = [
+                str(HGCC), *HGCC_FLAGS, *include_flags,
+                "-c", str(source), "-o", str(output),
+            ]
+            print(f"[hgcc] {source.relative_to(ROOT)}", flush=True)
+            subprocess.run(command, cwd=ROOT, check=True)
+            device_objects.append(str(output))
+
+        for extension in self.extensions:
+            extension.extra_objects = list(extension.extra_objects or []) + device_objects
+        super().build_extensions()
+
+
+extension = torch_cpp_extension.CppExtension(
     name="sageattention._qattn_ppu",
-    sources=[
-        "csrc/qattn/ppu/pybind_ppu.cpp",
-        "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu",
-        "csrc/qattn/ppu/quant_ppu.cu",
-    ],
+    sources=["csrc/qattn/ppu/pybind_ppu.cpp"],
     include_dirs=[
         str(ROOT / "csrc" / "qattn" / "ppu"),
         str(ACTLIZE / "include"),
         str(SDK_INCLUDE),
         *[str(path) for path in TARGET_INCLUDES],
     ],
-    extra_compile_args={"cxx": CXX_FLAGS, "nvcc": HGCC_FLAGS},
+    extra_compile_args=CXX_FLAGS,
+    library_dirs=[str(PPU_LIB)],
+    libraries=PPU_LIBRARIES,
+    runtime_library_dirs=[str(PPU_LIB)],
+    extra_link_args=[
+        "-Wl,--disable-new-dtags",
+        f"-Wl,-rpath,{PPU_LIB}",
+        "-Wl,-rpath,$ORIGIN",
+        "-ldl",
+    ],
 )
 
 setup(
@@ -81,6 +139,8 @@ setup(
     version="2.2.0+ppu",
     packages=find_packages(),
     ext_modules=[extension],
-    cmdclass={"build_ext": BuildExtension},
+    cmdclass={
+        "build_ext": PpuBuildExtension.with_options(use_ninja=False)
+    },
     python_requires=">=3.9",
 )

@@ -12,9 +12,9 @@
 
 #include <torch/extension.h>
 
-#include <cuda_bf16.h>
-#include <cuda_fp16.h>
-#include <cuda_runtime.h>
+#include <hggc_bf16.h>
+#include <hggc_fp16.h>
+#include <hggc_runtime.h>
 
 #include "attn_ppu_ops.cuh"
 
@@ -276,29 +276,25 @@ __global__ void qk_int8_pv_f16_kernel(
       }
     }
 
-    uint32_t probability[kQBlocksPerWarp][kKVBlocks][4];
-#pragma unroll
-    for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
-#pragma unroll
-      for (int kb = 0; kb < kKVBlocks; ++kb) {
-        score_accumulator_to_pv_operand(
-            probability[qb][kb], score.fp32[qb][kb]);
-      }
-    }
-
     wait_async_group<1>();
     __syncthreads();
 #pragma unroll
-    for (int d = 0; d < kVBlocks; ++d) {
-      int const column = d * 16;
+    for (int kb = 0; kb < kKVBlocks; ++kb) {
+      uint32_t probability[kQBlocksPerWarp][4];
 #pragma unroll
-      for (int kb = 0; kb < kKVBlocks; ++kb) {
+      for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
+        score_accumulator_to_pv_operand(
+            probability[qb], score.fp32[qb][kb]);
+      }
+#pragma unroll
+      for (int d = 0; d < kVBlocks; ++d) {
+        int const column = d * 16;
         uint32_t v_fragment[4];
         load_swizzled_transposed<kBlockKV, kHeadSlices>(
             v_fragment, smem_v, kb * 16, column % 64, column / 64);
 #pragma unroll
         for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
-          mma_f16f16f32(out[d][qb], probability[qb][kb], v_fragment);
+          mma_f16f16f32(out[d][qb], probability[qb], v_fragment);
         }
       }
     }
@@ -360,8 +356,14 @@ void launch_ppu_attention(
       + kBlockKV * HeadDim * sizeof(int8_t)
       + kBlockKV * HeadDim * sizeof(cutlass::half_t);
   auto kernel = &qk_int8_pv_f16_kernel<HeadDim, Causal, ReturnLse, Output>;
-  cudaFuncSetAttribute(
-      kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, int(smem_bytes));
+  // The opt-in is a per-function property.  Reissuing it for every attention
+  // op adds host/runtime work but cannot change the already-loaded kernel.
+  static hggcError_t const attribute_status = hggcFuncSetAttribute(
+      reinterpret_cast<void const *>(kernel),
+      hggcFuncAttributeMaxDynamicSharedMemorySize, int(smem_bytes));
+  TORCH_CHECK(attribute_status == hggcSuccess,
+              "PPU SageAttention dynamic-smem opt-in failed: ",
+              hggcGetErrorString(attribute_status));
   dim3 const grid((qo_len + kBlockQ - 1) / kBlockQ,
                   num_qo_heads, query.size(0));
   dim3 const block(32, kWarps);
@@ -376,9 +378,9 @@ void launch_ppu_attention(
       stride_bz_k, stride_seq_k, stride_h_k,
       stride_bz_v, stride_seq_v, stride_h_v,
       stride_bz_o, stride_seq_o, stride_h_o, softmax_scale);
-  auto const error = cudaGetLastError();
-  TORCH_CHECK(error == cudaSuccess,
-              "PPU SageAttention launch failed: ", cudaGetErrorString(error));
+  auto const error = hggcGetLastError();
+  TORCH_CHECK(error == hggcSuccess,
+              "PPU SageAttention launch failed: ", hggcGetErrorString(error));
 }
 
 template <int HeadDim, typename Output>

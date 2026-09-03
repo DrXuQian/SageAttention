@@ -32,7 +32,7 @@ fi
 grep -q 'EXPECTED-RED' "$out/layout-oracle-bad-bridge.log"
 
 python "$repo/dev/ppu_int8/check_ppu_port.py"
-for plant in bridge-order v-write row-formula scheduler; do
+for plant in bridge-order v-write row-formula scheduler pv-order; do
   if python "$repo/dev/ppu_int8/check_ppu_port.py" --plant "$plant" \
       >"$out/source-$plant.log" 2>&1; then
     echo "[PPU Sage local] FAIL: source plant $plant did not turn red" >&2

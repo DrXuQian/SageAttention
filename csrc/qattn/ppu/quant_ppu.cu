@@ -4,7 +4,7 @@
 
 #include <torch/extension.h>
 
-#include <cuda_runtime.h>
+#include <hggc_runtime.h>
 
 #include <cutlass/numeric_types.h>
 
@@ -121,10 +121,10 @@ void launch_quant(
           int(input.stride(0)), stride_seq_input, stride_h_input,
           int(output.stride(0)), stride_seq_output, stride_h_output,
           stride_bz_mean, stride_h_mean);
-  auto const error = cudaGetLastError();
-  TORCH_CHECK(error == cudaSuccess,
+  auto const error = hggcGetLastError();
+  TORCH_CHECK(error == hggcSuccess,
               "PPU SageAttention quantization launch failed: ",
-              cudaGetErrorString(error));
+              hggcGetErrorString(error));
 }
 
 }  // namespace detail

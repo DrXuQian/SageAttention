@@ -27,7 +27,6 @@ printf '[PPU Sage box] host_layout_evidence=COMMITTED/PASS fresh_box_execution=0
 
 export PPU_SDK="$sdk"
 export PATH="$sdk/bin:$PATH"
-export PYTORCH_NVCC="$sdk/bin/hgcc"
 (
   cd "$repo"
   python setup_ppu.py build_ext --inplace --force \

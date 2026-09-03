@@ -77,6 +77,23 @@ After correctness admission, the first optimization targets are the K/V
 pipeline depth and barrier count; the algorithm and actlize fragment maps stay
 fixed.
 
+The PPU extension does not use PyTorch's `CUDAExtension`: that route selects
+the SDK's CUDA-compatibility `nvcc` wrapper and is not the shipping PPU device
+language.  `setup_ppu.py` compiles device TUs with the SDK's native
+`hgcc -x hg -DSWITCH_TO_HGGCRT`, compiles the pybind TU with the host C++
+compiler, and links both against Torch and the PPU runtime.  The dynamic-shared
+memory opt-in is checked once per kernel specialization instead of being
+reissued for every attention call; the before/after PPU ISA is byte-identical.
+
+The PV traversal is K-block-major.  That keeps only one K block's FP16
+probability operands live while preserving the exact `kb=0,1,2,3` accumulation
+order of every `(d,qb)` output.  The host proof exhausts D64 and D128 and its
+reversed-K negative turns red.  With SDK 2.1.1 this removes the only two 8-byte
+stack spills (D128 causal/no-LSE, FP16 and BF16 output); all 28 device
+specializations now report stack size zero.  Static instruction footprint grows
+slightly (D64 full/no-LSE 2095 to 2103, D128 2822 to 2845), so latency remains a
+device measurement rather than being inferred from the resource improvement.
+
 ## Commands
 
 Local, no PPU execution:
@@ -84,6 +101,15 @@ Local, no PPU execution:
 ```bash
 SAGEATTENTION_PPU_ORACLE_OUT=/workspace/sageattention-ppu-local \
   dev/ppu_int8/run_local_gates.sh
+```
+
+Native PPU SDK compile, link, device-symbol census, and resource admission
+(also no device execution):
+
+```bash
+PPU_SDK=/usr/local/PPU_SDK \
+SAGEATTENTION_PPU_SDK_OUT=/workspace/sageattention-ppu-sdk \
+  bash dev/ppu_int8/run_sdk_compile.sh
 ```
 
 PPU build and four-case numeric admission:

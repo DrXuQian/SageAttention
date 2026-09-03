@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-#include <cuda_fp16.h>
+#include <hggc_fp16.h>
 
 #include <cute/arch/copy_ppu.hpp>
 #include <cute/arch/copy_ppu0010_aiu.hpp>

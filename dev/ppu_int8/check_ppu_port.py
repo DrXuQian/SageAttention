@@ -37,11 +37,27 @@ def scheduler_bad(batches: int, heads: int, qtiles: int, causal: bool) -> int:
     return bad + (batches * heads * qtiles - len(seen))
 
 
+def pv_schedule_bad(vblocks: int, qblocks: int, kblocks: int,
+                    reverse_k: bool) -> int:
+    """Prove kb-major delivery preserves each output's K accumulation order."""
+    visits: dict[tuple[int, int], list[int]] = {
+        (d, qb): [] for d in range(vblocks) for qb in range(qblocks)
+    }
+    k_order = range(kblocks - 1, -1, -1) if reverse_k else range(kblocks)
+    for kb in k_order:
+        for d in range(vblocks):
+            for qb in range(qblocks):
+                visits[d, qb].append(kb)
+    expected = list(range(kblocks))
+    return sum(order != expected for order in visits.values())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--plant",
-        choices=("bridge-order", "v-write", "row-formula", "scheduler"),
+        choices=("bridge-order", "v-write", "row-formula", "scheduler",
+                 "pv-order"),
     )
     args = parser.parse_args()
 
@@ -110,6 +126,17 @@ def main() -> int:
         "C-to-A bridge operands are reversed",
         failures,
     )
+    require(
+        re.search(
+            r"for \(int kb = 0; kb < kKVBlocks; \+\+kb\).*?"
+            r"uint32_t probability\[kQBlocksPerWarp\]\[4\].*?"
+            r"for \(int d = 0; d < kVBlocks; \+\+d\)",
+            kernel,
+            re.DOTALL,
+        ) is not None,
+        "PV path no longer bounds probability lifetime to one K block",
+        failures,
+    )
 
     shipping_sources = {
         "csrc/qattn/ppu/pybind_ppu.cpp",
@@ -120,6 +147,13 @@ def main() -> int:
         require(f'"{source}"' in setup, f"shipping source missing: {source}", failures)
     require("qk_int_sv_f16_cuda_sm80.cu" not in setup and "sm90" not in setup,
             "NVIDIA source entered the PPU build graph", failures)
+    require("PpuBuildExtension" in setup and "CppExtension" in setup,
+            "PPU build does not split host C++ from native hgcc device objects",
+            failures)
+    require("CUDAExtension" not in setup and "CUDA_SDK/bin/nvcc" not in setup,
+            "PPU build fell back to the CUDA compatibility wrapper", failures)
+    require('"-x", "hg"' in setup and '"-DSWITCH_TO_HGGCRT"' in setup,
+            "native hgcc device-language contract is missing", failures)
 
     total_scheduler = 0
     for batches in range(1, 4):
@@ -134,6 +168,14 @@ def main() -> int:
                         )
     require(total_scheduler == 0,
             f"scheduler bijection failed: bad={total_scheduler}", failures)
+
+    pv_bad = 0
+    for vblocks, qblocks in ((4, 2), (8, 2)):
+        pv_bad += pv_schedule_bad(
+            vblocks, qblocks, 4, reverse_k=args.plant == "pv-order"
+        )
+    require(pv_bad == 0,
+            f"PV K-order/coverage failed: bad_outputs={pv_bad}", failures)
 
     if failures:
         for failure in failures:
