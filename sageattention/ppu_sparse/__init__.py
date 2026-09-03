@@ -2,7 +2,10 @@
 
 from .plan import KV_BLOCK, SparseAttentionPlan
 from .planners import make_h3_topk_plan, make_sol_plan
-from .reference import sparse_attention_reference
+from .reference import (
+    quantized_sparse_attention_reference,
+    sparse_attention_reference,
+)
 from .api import (
     sageattn_block_sparse_ppu,
     sageattn_h3_topk_ppu,
@@ -15,6 +18,7 @@ __all__ = [
     "make_h3_topk_plan",
     "make_sol_plan",
     "sparse_attention_reference",
+    "quantized_sparse_attention_reference",
     "sageattn_block_sparse_ppu",
     "sageattn_h3_topk_ppu",
     "sageattn_sol_ppu",

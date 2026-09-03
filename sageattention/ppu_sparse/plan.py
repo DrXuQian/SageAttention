@@ -7,7 +7,7 @@ blocks that must not also contribute their block-mean summary.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import torch
 
 
@@ -70,6 +70,7 @@ class SparseAttentionPlan:
     route_block: int
     algorithm: str
     use_summary: bool
+    _admitted: bool = field(default=False, init=False, repr=False, compare=False)
 
     @property
     def query_blocks(self) -> int:
@@ -86,6 +87,10 @@ class SparseAttentionPlan:
     @property
     def rows(self) -> int:
         return self.batch * self.query_heads * self.query_blocks
+
+    @property
+    def admitted(self) -> bool:
+        return self._admitted
 
     def validate(self, *, deep: bool = True) -> "SparseAttentionPlan":
         tensors = (
@@ -180,6 +185,7 @@ class SparseAttentionPlan:
                 raise ValueError(f"exact-only row {row} cannot be empty")
         if not bool(torch.isfinite(self.log2_block_counts).all()):
             raise ValueError("summary block counts must be finite and positive")
+        object.__setattr__(self, "_admitted", True)
         return self
 
 
@@ -247,7 +253,12 @@ def build_plan(
         algorithm=algorithm,
         use_summary=bool(use_summary),
     )
-    return plan.validate(deep=False)
+    # The builders are the sole production constructors.  Their vectorized
+    # expansion is covered exhaustively by the host admission; mark the result
+    # admitted without imposing a device-to-host CSR scan on every real plan.
+    plan.validate(deep=False)
+    object.__setattr__(plan, "_admitted", True)
+    return plan
 
 
 __all__ = [

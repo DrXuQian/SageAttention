@@ -70,6 +70,11 @@ def sageattn_block_sparse_ppu(
     ):
         raise ValueError("sparse plan identity does not match Q/K/V")
     plan.validate(deep=False)
+    if not plan.admitted:
+        raise ValueError(
+            "sparse plan was not produced by an admitted planner; "
+            "call plan.validate(deep=True) once before execution"
+        )
     if plan.exact_row_ptr.device != q.device:
         raise ValueError("sparse plan and Q/K/V must share one device")
     if head_dim != 128:
