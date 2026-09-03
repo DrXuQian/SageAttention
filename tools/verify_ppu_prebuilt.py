@@ -37,6 +37,17 @@ def public_version(version: str) -> str:
     return version.split("+", 1)[0]
 
 
+def selection_key(runtime: dict[str, Any]) -> str:
+    version = str(runtime["torch_public_version"]).split(".")
+    if len(version) < 2 or not all(part.isdigit() for part in version[:2]):
+        raise IdentityError(
+            f"cannot derive Torch major.minor from {runtime['torch_public_version']!r}"
+        )
+    python_tag = str(runtime["python_cache_tag"]).replace("-", "")
+    abi = int(bool(runtime["cxx11_abi"]))
+    return f"{python_tag}-torch{version[0]}.{version[1]}-cxx11abi{abi}"
+
+
 def runtime_identity() -> dict[str, Any]:
     try:
         import torch
@@ -186,22 +197,67 @@ def self_test(manifest: dict[str, Any], repo: Path, artifact: Path) -> None:
     print("[PPU sparse prebuilt negative] PASS: all identity mutations rejected")
 
 
+def select_prebuilt(
+    root: Path, runtime: dict[str, Any]
+) -> tuple[str, Path, Path, dict[str, Any]]:
+    key = selection_key(runtime)
+    directory = root / key
+    manifest_path = directory / "manifest.json"
+    if not manifest_path.is_file():
+        available = sorted(
+            path.name for path in root.iterdir()
+            if path.is_dir() and (path / "manifest.json").is_file()
+        ) if root.is_dir() else []
+        raise IdentityError(
+            f"no prebuilt artifact for runtime key {key!r}; available={available}"
+        )
+    manifest = json.loads(manifest_path.read_text())
+    artifact_name = manifest.get("artifact")
+    if not isinstance(artifact_name, str) or not artifact_name:
+        raise IdentityError(f"manifest {manifest_path} has no artifact filename")
+    artifact = directory / artifact_name
+    return key, manifest_path, artifact, manifest
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, required=True)
-    parser.add_argument("--artifact", type=Path, required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--prebuilt-root", type=Path)
+    source.add_argument("--manifest", type=Path)
+    parser.add_argument("--artifact", type=Path)
     parser.add_argument("--runtime-dir", type=Path)
     parser.add_argument("--json-out", type=Path)
+    parser.add_argument("--artifact-path-out", type=Path)
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
     try:
-        manifest = json.loads(args.manifest.read_text())
+        runtime = runtime_identity()
+        if args.prebuilt_root:
+            key, manifest_path, artifact, manifest = select_prebuilt(
+                args.prebuilt_root, runtime
+            )
+        else:
+            if args.artifact is None:
+                raise IdentityError("--artifact is required with --manifest")
+            key = selection_key(runtime)
+            manifest_path = args.manifest
+            artifact = args.artifact
+            manifest = json.loads(manifest_path.read_text())
         if args.self_test:
-            self_test(manifest, repo, args.artifact)
-        result = verify(manifest, repo, args.artifact, runtime_identity())
+            self_test(manifest, repo, artifact)
+            if args.prebuilt_root:
+                unsupported = dict(runtime)
+                unsupported["torch_public_version"] = "99.0.0"
+                expected_red(
+                    "unsupported-runtime-selection",
+                    lambda: select_prebuilt(args.prebuilt_root, unsupported),
+                )
+        result = verify(manifest, repo, artifact, runtime)
+        result["selection_key"] = key
+        result["manifest"] = str(manifest_path)
         if args.runtime_dir:
             libraries = verify_runtime_libraries(manifest, args.runtime_dir)
             result["ppu_runtime"] = {
@@ -216,8 +272,12 @@ def main() -> int:
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         args.json_out.write_text(rendered + "\n")
+    if args.artifact_path_out:
+        args.artifact_path_out.parent.mkdir(parents=True, exist_ok=True)
+        args.artifact_path_out.write_text(str(artifact.resolve()) + "\n")
     print(
         "[PPU sparse prebuilt] PASS: "
+        f"selection={result['selection_key']} "
         f"artifact={result['artifact_sha256']} "
         f"sources={len(result['source_sha256'])} "
         f"build_source={result['build_source_git_commit']}"

@@ -4,9 +4,8 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sha="$(git -C "$repo" rev-parse HEAD)"
 out="${OUT:-/workspace/sageattention-ppu-sparse-${sha:0:8}-$(date -u +%Y%m%dT%H%M%SZ)}"
-prebuilt_dir="$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1"
-manifest="$prebuilt_dir/manifest.json"
-extension="$prebuilt_dir/_qattn_ppu.cpython-312-x86_64-linux-gnu.so"
+prebuilt_root="$repo/prebuilt/ppu_10"
+artifact_path_file="$out/prebuilt-artifact.path"
 runtime_dir="${PPU_RUNTIME_DIR:-${PPU_SDK:-${PPU_HOME:-/usr/local/PPU_SDK}}/lib}"
 mkdir -p "$out"
 
@@ -14,11 +13,13 @@ printf '[PPU sparse box] mode=EXECUTION-ONLY sha=%s actlize=%s runtime=%s out=%s
   "$sha" "$(git -C "$repo" rev-parse HEAD:third_party/actlize)" "$runtime_dir" "$out"
 
 python "$repo/tools/verify_ppu_prebuilt.py" \
-  --repo "$repo" --manifest "$manifest" --artifact "$extension" \
+  --repo "$repo" --prebuilt-root "$prebuilt_root" \
   --runtime-dir "$runtime_dir" \
   --json-out "$out/prebuilt-identity.json" \
+  --artifact-path-out "$artifact_path_file" \
   2>&1 | tee "$out/prebuilt-identity.log"
 
+extension="$(<"$artifact_path_file")"
 cp -f "$extension" "$repo/sageattention/"
 sha256sum "$extension" | tee "$out/binary.sha256"
 python "$repo/dev/ppu_sparse/test_plans.py" | tee "$out/host-plan-admission.log"

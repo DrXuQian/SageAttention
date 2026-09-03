@@ -9,8 +9,7 @@ python "$repo/dev/ppu_sparse/test_plans.py" | tee "$out/plan-oracle.log"
 python -m py_compile "$repo"/sageattention/ppu_sparse/*.py
 python "$repo/tools/verify_ppu_prebuilt.py" \
   --repo "$repo" \
-  --manifest "$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1/manifest.json" \
-  --artifact "$repo/prebuilt/ppu_10/cpython312-torch2.8-cxx11abi1/_qattn_ppu.cpython-312-x86_64-linux-gnu.so" \
+  --prebuilt-root "$repo/prebuilt/ppu_10" \
   --json-out "$out/prebuilt-identity.json" --self-test \
   | tee "$out/prebuilt-identity.log"
 

@@ -57,9 +57,11 @@ bash dev/ppu_sparse/run_local_gates.sh
 The checked-in PPU extension is compiled locally from the real `-arch=ppu_10`
 source graph.  Its manifest binds the binary hash to the source hashes,
 actlize revision, Python/Torch ABI, SDK release, and the locally measured
-resource census.  The box runner is execution-only: it verifies that identity,
-copies the prebuilt extension into the package, and never invokes `hgcc`,
-`build_ext`, or a disassembler.  It then requires:
+resource census.  Separate Torch 2.8 and 2.9 artifacts are selected
+automatically from measured Python/Torch/CXX11 ABI identity.  The box runner
+is execution-only: it verifies that identity, copies the matching prebuilt
+extension into the package, and never invokes `hgcc`, `build_ext`, or a
+disassembler.  It then requires:
 
 1. full-density Q128 CSR is raw-bit identical to dense PPU SageAttention;
 2. full-density Q64 CSR is raw-bit identical to the same dense path;
