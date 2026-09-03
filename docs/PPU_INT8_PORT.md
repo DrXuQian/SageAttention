@@ -45,6 +45,18 @@ from its own result SHA and prints `fresh_box_execution=0`. NVIDIA nvcc cannot
 instantiate actlize's HGGCCC-only device atoms, so that frontend is reported as
 an explicit SKIP, never as a successful PPU body compile.
 
+The first device admission exposed a compiler seam that the layout algebra
+could not see: the initial actlize fp16-output atom treated four independent
+reference arguments as one contiguous array.  A caller passing the same zero
+object as all four C operands therefore loaded three neighboring values.  The
+generated PPU ISA initialized only 1/4 accumulator registers and produced a
+stable but grossly wrong PV result while QK/LSE remained correct.  The fixed
+atom binds every reference independently.  `bridge_codegen_probe.cu` now
+compares it with the device-proven raw spelling and retains the exact old
+implementation as a negative; generated ISA must report `4/4`, `4/4`, and
+`1/4 EXPECTED-RED`.  The shipping binary is additionally checked at all 128
+static bridge sites.
+
 ## First shipping scope
 
 - forward, fixed-length HND and NHD tensors;
@@ -71,11 +83,9 @@ The bridge repair did not add an MMA relative to the first draft.  Matched
 64-wide Q/K slices make D128 issue two known AIU operations instead of one
 unproved 128-wide operation.  The loop has four CTA barriers per K64 block.
 
-Latency, registers, spills, achieved occupancy, and ACU instruction mix are
-device-only verdicts.  No performance claim is made from the local oracle.
-After correctness admission, the first optimization targets are the K/V
-pipeline depth and barrier count; the algorithm and actlize fragment maps stay
-fixed.
+Registers, spills, and generated bridge initialization are established by the
+local PPU SDK build.  Latency, achieved occupancy, and ACU instruction mix
+remain device-only verdicts; none is inferred from the host layout oracle.
 
 The PPU extension does not use PyTorch's `CUDAExtension`: that route selects
 the SDK's CUDA-compatibility `nvcc` wrapper and is not the shipping PPU device
@@ -124,3 +134,36 @@ The device admission covers full/causal, a tail, GQA, NHD, D64, D128
 multi-slice, LSE, and three raw-bit-stable replays.  Its reference consumes the
 actual quantized Q/K and scale tensors, so quantization error cannot disguise a
 layout error.
+
+## PPU0010 device verdict (2026-09-03)
+
+The prebuilt extension from `44a641a` (SHA256
+`059c9948f439abc1663103a3279a02ed7c40d598606b42895b307fb13fbe4168`)
+passed all four numeric admissions.  The worst output error was
+`9.221e-5`, the worst LSE error was `4.8e-7`, and every replay was raw-bit
+stable.
+
+Performance commit `3794335` measured `B=1, H=Hkv=16, N=4096, D=128` with
+seven samples and 20 launches per sample.  Logical MFU uses the explicitly
+printed 500 TFLOP/s PPU denominator:
+
+| Mode | Scope | Median | Logical TFLOP/s | Logical MFU |
+|---|---|---:|---:|---:|
+| full | prequantized core | 405.972 us | 338.543 | 67.71% |
+| full | Q/K quantization + core | 529.114 us | 259.753 | 51.95% |
+| causal | prequantized core | 289.606 us | 237.344 | 47.47% |
+| causal | Q/K quantization + core | 400.608 us | 171.580 | 34.32% |
+
+The full-attention core exceeds the device-proven fp16 `fattn_ppu.cu` anchor
+of 294 TFLOP/s by 15.2%.  The causal MFU uses triangular useful FLOPs and is
+not compared directly with full attention; its 289.606 us latency is 20.7%
+below the existing 365 us causal anchor.  Quantization adds 123.142 us to full
+attention and 111.002 us to causal attention.  Therefore the next performance
+bisection is Q quantization versus K quantization versus the already-admitted
+core, not an unmeasured rewrite of the attention mainloop.
+
+Reproduce the timing without rebuilding:
+
+```bash
+RUN_CAUSAL=1 bash tools/run_ppu_int8_perf_box.sh
+```
