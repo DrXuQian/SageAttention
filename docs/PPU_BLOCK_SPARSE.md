@@ -80,6 +80,32 @@ OUT=/workspace/sageattention-ppu-sparse-run \
 runtime libraries only and is not a compiler path.  A source, ABI, submodule,
 or binary mismatch fails before any device launch.
 
+## First PPU device verdict
+
+On 2026-09-04, commit `8ea96fc` and the Torch 2.9 artifact
+`7711a66e1c3980a6d16be3df58abde6cdaea19b4c06910d33ff3f9f3adc0af41`
+passed the complete box admission at `B=1, H=Hkv=16, N=4096, D=128`.
+Both full-density sparse geometries were raw-bit identical to dense.  H3 and
+Sol agreed with the independent quantized oracle to maximum absolute errors
+of `1.2536e-4` and `1.2467e-4`, respectively, and repeated-launch fingerprints
+were stable.
+
+| measured region | median (us) | speedup vs dense |
+|---|---:|---:|
+| dense quantization + core | 584.048 | 1.000x |
+| H3 prequantized core, 25% exact density | 152.956 | 3.818x |
+| H3 preplanned quantization + core | 347.368 | 1.681x |
+| Sol prequantized core, 10.9375% exact density | 100.520 | 5.810x |
+| Sol preplanned quantization + core | 292.352 | 1.998x |
+
+The semantic-reference planners cost 871.080 us (H3) and 982.000 us (Sol),
+so planning on every invocation reverses both wins to 0.479x and 0.458x.  The
+hard per-invocation planning budgets for merely beating dense are therefore
+236.680 us for H3 and 291.696 us for Sol.  This localizes the next production
+work: preserve the admitted `SparseAttentionPlan` contract and replace route
+generation, rather than rewriting the proven sparse executor.  The exact-tile
+density is not a complete work fraction because summary rows also execute.
+
 Performance output keeps three costs separate: planner, prequantized sparse
 core, and preplanned quantization-plus-core.  The current Python/Torch Sol
 planner materializes its route score matrix; it is the semantic reference and
