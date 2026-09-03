@@ -154,6 +154,13 @@ printed 500 TFLOP/s PPU denominator:
 | causal | prequantized core | 289.606 us | 237.344 | 47.47% |
 | causal | Q/K quantization + core | 400.608 us | 171.580 | 34.32% |
 
+The registered headline result is the **prequantized attention core**:
+`405.972 us / 338.543 TFLOP/s / 67.71% logical MFU` for full attention.
+Q/K quantization is deliberately outside that result; `529.114 us / 51.95%`
+is retained only as a separately labelled end-to-end diagnostic.  The full
+and causal output fingerprints were respectively `5837302b21552a97` and
+`070b28c772e1d76e7`.  No NVIDIA measurement is part of this verdict.
+
 The full-attention core exceeds the device-proven fp16 `fattn_ppu.cu` anchor
 of 294 TFLOP/s by 15.2%.  The causal MFU uses triangular useful FLOPs and is
 not compared directly with full attention; its 289.606 us latency is 20.7%
