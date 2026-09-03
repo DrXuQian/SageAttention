@@ -30,6 +30,7 @@ fi
 
 "$sdk/bin/hgobjdump" --list-all --demangle "$extension" >"$out/device-functions.log"
 "$sdk/bin/hgobjdump" --dump-resource-usage=all "$extension" >"$out/resources.log"
+"$sdk/bin/hgobjdump" --dump-isa "$extension" >"$out/shipping-isa.log"
 
 attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_f16_kernel' \
   "$out/device-functions.log")"
@@ -64,6 +65,36 @@ print(
     "spill_stack=0/PASS"
 )
 PY
+
+# Compile the score-C -> PV-A bridge twice through the fixed actlize atom and
+# the device-proven raw spelling, plus the exact historical reference-aliasing
+# defect.  This is a generated-ISA gate: a host layout model cannot see whether
+# the compiler actually initialized all four hardware accumulator registers.
+probe_includes=(
+  "-I$repo/csrc/qattn/ppu"
+  "-I$repo/csrc/actlize/include"
+  "-I$sdk/include"
+)
+for target_include in "$sdk"/targets/*/include; do
+  probe_includes+=("-I$target_include")
+done
+"$sdk/bin/hgcc" \
+  --forward-unknown-to-host-compiler --forward-unknown-to-host-linker \
+  -arch=ppu_10 -x hg -DSWITCH_TO_HGGCRT \
+  -Xcompiler -ftemplate-depth=8192 -Xllvm -ppu-max-vreg-count=256 \
+  --expt-relaxed-constexpr -DUSE_CLANG -DCUTLASS_VERSIONS_GENERATED \
+  -DCUTLASS_USE_PACKED_TUPLE=1 -DCUTE_USE_PACKED_TUPLE=1 \
+  -DUSE_PPU=1 -DUSE_AIU=1 -O3 -std=c++17 --use_fast_math -fPIC \
+  "${probe_includes[@]}" \
+  -c "$repo/dev/ppu_int8/bridge_codegen_probe.cu" \
+  -o "$out/bridge_codegen_probe.o" \
+  >"$out/bridge-codegen-build.log" 2>&1
+"$sdk/bin/hgobjdump" --dump-isa "$out/bridge_codegen_probe.o" \
+  >"$out/bridge-codegen-isa.log"
+python "$repo/dev/ppu_int8/check_bridge_codegen.py" \
+  "$out/bridge-codegen-isa.log"
+python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
+  "$out/shipping-isa.log"
 
 sha256sum "$extension" | tee "$out/binary.sha256"
 printf '[PPU Sage SDK] PASS: native -x hg build; attention=%s quant=%s; no device code executed\n' \
