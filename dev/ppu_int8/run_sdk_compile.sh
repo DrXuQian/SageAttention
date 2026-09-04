@@ -36,11 +36,13 @@ attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_f16_kernel' \
   "$out/device-functions.log")"
 quant_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_int8_kernel' \
   "$out/device-functions.log")"
-sparse_count="$(rg -c 'Func [0-9]+ \(kernel\): .*block_sparse_kernel' \
-  "$out/device-functions.log")"
-if [[ "$attn_count" -ne 16 || "$sparse_count" -ne 4 || "$quant_count" -ne 12 ]]; then
-  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/16 sparse=%s/4 quant=%s/12\n' \
-    "$attn_count" "$sparse_count" "$quant_count" >&2
+if [[ "$attn_count" -ne 16 || "$quant_count" -ne 12 ]]; then
+  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/16 quant=%s/12\n' \
+    "$attn_count" "$quant_count" >&2
+  exit 1
+fi
+if rg -q 'block_sparse_kernel|radial_sparse_kernel' "$out/device-functions.log"; then
+  echo '[PPU Sage SDK] FAIL: sparse device symbol remains in dense SageAttention' >&2
   exit 1
 fi
 
@@ -52,24 +54,20 @@ import sys
 text = Path(sys.argv[1]).read_text()
 vregs = [int(value) for value in re.findall(r"vreg_number:(\d+)", text)]
 stacks = [int(value) for value in re.findall(r"STACK SIZE:(\d+)", text)]
-if len(vregs) != 32 or len(stacks) != 32:
+if len(vregs) != 28 or len(stacks) != 28:
     raise SystemExit(
-        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/32 "
-        f"stacks={len(stacks)}/32"
+        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/28 "
+        f"stacks={len(stacks)}/28"
     )
 private = [value for value in stacks if value]
-# Only the two D128 summary instances (Q64 Sol and Q128 H3) may carry the
-# currently measured 8-byte scalar private frame.  Exact-only sparse and every
-# pre-existing dense/quant instance remain spill-free.  ACU must still verify
-# whether this frame produces any actual private-memory traffic.
-if max(vregs) > 256 or sorted(private) != [8, 8]:
+if max(vregs) > 256 or private:
     raise SystemExit(
         f"[PPU Sage SDK] FAIL: max_vregs={max(vregs)} nonzero_stacks="
-        f"{private} (expected two 8-byte summary frames)"
+        f"{private}"
     )
 print(
-    f"[PPU Sage SDK] resources kernels=32 max_vregs={max(vregs)} "
-    "dense+quant+exact_stack=0 summary_private_frame=8B/REGISTERED"
+    f"[PPU Sage SDK] resources kernels=28 max_vregs={max(vregs)} "
+    "spill_stack=0/PASS"
 )
 PY
 
@@ -104,5 +102,5 @@ python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
   "$out/shipping-isa.log"
 
 sha256sum "$extension" | tee "$out/binary.sha256"
-printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s sparse=%s quant=%s; no device code executed\n' \
-  "$attn_count" "$sparse_count" "$quant_count"
+printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s; no device code executed\n' \
+  "$attn_count" "$quant_count"

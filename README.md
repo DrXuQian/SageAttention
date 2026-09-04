@@ -113,9 +113,9 @@ attn_output = sageattn(q, k, v, tensor_layout="HND", is_causal=False)
 + `q, k, v` are **FP16/BF16** dtype with the shape `(batch_size, head_num, seq_len, head_dim)` using default `tensor_layout="HND"`. For shape `(batch_size, seq_len, head_num, head_dim)`, set `tensor_layout="NHD"`. 
 + `is_causal` determines the use of a causal mask.
 
-The actlize-backed PPU build also provides H3 top-k-summary and Sol-summary
-block-sparse forwards.  Their exact scope and device admission command are in
-[`docs/PPU_BLOCK_SPARSE.md`](docs/PPU_BLOCK_SPARSE.md).
+The actlize-backed PPU build owns dense SageAttention.  PPU block-sparse and
+Radial/SparseSage2 execution lives in the separate SpargeAttn repository, in
+the same place as the NVIDIA block-sparse implementation.
 
 ### Available APIs:
 + `sageattn`: Automatically selects the optimal kernel based on the GPU to achieve a good performance-accuracy trade-off.

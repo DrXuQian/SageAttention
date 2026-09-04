@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed identity verifier for the prebuilt PPU sparse extension."""
+"""Fail-closed identity verifier for the prebuilt PPU SageAttention extension."""
 
 from __future__ import annotations
 
@@ -164,7 +164,7 @@ def expected_red(label: str, callback) -> None:
     try:
         callback()
     except IdentityError as exc:
-        print(f"[PPU sparse prebuilt negative] {label}: EXPECTED_RED/PASS ({exc})")
+        print(f"[PPU Sage prebuilt negative] {label}: EXPECTED_RED/PASS ({exc})")
         return
     raise IdentityError(f"negative control {label!r} unexpectedly passed")
 
@@ -194,7 +194,7 @@ def self_test(manifest: dict[str, Any], repo: Path, artifact: Path) -> None:
         "runtime-abi-change",
         lambda: verify(manifest, repo, artifact, wrong_runtime),
     )
-    print("[PPU sparse prebuilt negative] PASS: all identity mutations rejected")
+    print("[PPU Sage prebuilt negative] PASS: all identity mutations rejected")
 
 
 def select_prebuilt(
@@ -265,7 +265,7 @@ def main() -> int:
                 "libraries": libraries,
             }
     except (IdentityError, OSError, ValueError, json.JSONDecodeError) as exc:
-        print(f"[PPU sparse prebuilt] FAIL: {exc}", file=sys.stderr)
+        print(f"[PPU Sage prebuilt] FAIL: {exc}", file=sys.stderr)
         return 1
 
     rendered = json.dumps(result, indent=2, sort_keys=True)
@@ -276,7 +276,7 @@ def main() -> int:
         args.artifact_path_out.parent.mkdir(parents=True, exist_ok=True)
         args.artifact_path_out.write_text(str(artifact.resolve()) + "\n")
     print(
-        "[PPU sparse prebuilt] PASS: "
+        "[PPU Sage prebuilt] PASS: "
         f"selection={result['selection_key']} "
         f"artifact={result['artifact_sha256']} "
         f"sources={len(result['source_sha256'])} "

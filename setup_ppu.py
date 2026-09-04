@@ -74,8 +74,6 @@ HGCC_FLAGS = [
 
 DEVICE_SOURCES = [
     ROOT / "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu",
-    ROOT / "csrc/qattn/ppu/block_sparse_ppu.cu",
-    ROOT / "csrc/qattn/ppu/radial_sparse_ppu.cu",
     ROOT / "csrc/qattn/ppu/quant_ppu.cu",
 ]
 DEVICE_INCLUDES = [
