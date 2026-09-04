@@ -30,16 +30,22 @@ python "$repo/dev/ppu_int8/device_smoke.py" 2>&1 | tee "$out/dense-device-anchor
 python "$repo/dev/ppu_sparse/device_smoke.py" 2>&1 | tee "$out/device-smoke.log"
 
 if [[ "${RUN_PERF:-1}" == 1 ]]; then
-  python "$repo/dev/ppu_sparse/device_perf.py" \
-    --batch "${BATCH:-1}" \
-    --heads "${HEADS:-16}" \
-    --kv-heads "${KV_HEADS:-16}" \
-    --seq "${SEQ:-4096}" \
-    --top-k "${TOP_K:-8}" \
-    --tau "${TAU:-1.0}" \
-    --warmup "${WARMUP:-3}" \
-    --samples "${SAMPLES:-7}" \
-    --launches "${LAUNCHES:-10}" \
+  perf_args=(
+    --batch "${BATCH:-1}"
+    --heads "${HEADS:-16}"
+    --kv-heads "${KV_HEADS:-16}"
+    --seq "${SEQ:-4096}"
+    --top-k "${TOP_K:-8}"
+    --tau "${TAU:-1.0}"
+    --warmup "${WARMUP:-3}"
+    --samples "${SAMPLES:-7}"
+    --launches "${LAUNCHES:-10}"
+  )
+  if [[ -n "${RADIAL_MASK:-}" ]]; then
+    perf_args+=(--radial-mask "$RADIAL_MASK"
+      --radial-mask-kind "${RADIAL_MASK_KIND:-compute}")
+  fi
+  python "$repo/dev/ppu_sparse/device_perf.py" "${perf_args[@]}" \
     2>&1 | tee "$out/device-perf.log"
 fi
 

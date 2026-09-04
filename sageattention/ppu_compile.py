@@ -179,3 +179,52 @@ def _qk_int8_sv_f16_block_sparse_accum_f32_attn_fake(
             (batch, heads, qo_len), device=query.device, dtype=torch.float32
         )
     return torch.empty((0,), device=query.device, dtype=torch.float32)
+
+
+@torch.library.custom_op(
+    "sageattention::qk_int8_sv_f16_radial_accum_f32_attn_ppu",
+    mutates_args=("output",),
+    device_types="cuda",
+)
+def qk_int8_sv_f16_radial_accum_f32_attn(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    output: torch.Tensor,
+    query_scale: torch.Tensor,
+    key_scale: torch.Tensor,
+    block_lut: torch.Tensor,
+    valid_block_num: torch.Tensor,
+    tensor_layout: int,
+    sm_scale: float,
+) -> torch.Tensor:
+    return _qattn_ppu.qk_int8_sv_f16_radial_accum_f32_attn(
+        query,
+        key,
+        value,
+        output,
+        query_scale,
+        key_scale,
+        block_lut,
+        valid_block_num,
+        tensor_layout,
+        sm_scale,
+    )
+
+
+@torch.library.register_fake(
+    "sageattention::qk_int8_sv_f16_radial_accum_f32_attn_ppu"
+)
+def _qk_int8_sv_f16_radial_accum_f32_attn_fake(
+    query,
+    key,
+    value,
+    output,
+    query_scale,
+    key_scale,
+    block_lut,
+    valid_block_num,
+    tensor_layout,
+    sm_scale,
+):
+    return torch.empty((0,), device=query.device, dtype=torch.float32)

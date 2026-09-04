@@ -20,6 +20,12 @@ from sageattention.ppu_sparse.planners import (
     make_sol_plan,
 )
 from sageattention.ppu_sparse.reference import sparse_attention_reference
+from sageattention.ppu_sparse.radial import (
+    make_radial_plan_from_block_mask,
+    make_radial_plan_from_compute_mask,
+    radial_plan_mask,
+)
+from sageattention.ppu_sparse.radial_reference import radial_attention_reference
 
 
 def expect_red(name, fn, contains: str) -> None:
@@ -168,11 +174,151 @@ def test_sol() -> None:
     )
 
 
+def _radial_expected(
+    source: torch.Tensor, source_block: int, q_len: int, kv_len: int
+) -> torch.Tensor:
+    """Scalar anchor independent of the vectorized production lowering."""
+    q_blocks = (q_len + 127) // 128
+    kv_blocks = (kv_len + 63) // 64
+    expected = torch.zeros((q_blocks, kv_blocks), dtype=torch.bool)
+    for qb in range(q_blocks):
+        source_rows = (qb,) if source_block == 128 else (2 * qb, 2 * qb + 1)
+        for kb in range(kv_blocks):
+            source_col = kb // 2 if source_block == 128 else kb
+            expected[qb, kb] = any(
+                row < source.size(0)
+                and source_col < source.size(1)
+                and bool(source[row, source_col])
+                for row in source_rows
+            )
+    return expected
+
+
+def test_radial() -> None:
+    q_len = kv_len = 257
+    source128 = torch.tensor(
+        [[1, 0, 1], [0, 1, 0], [0, 0, 1]], dtype=torch.int8
+    )
+    plan128 = make_radial_plan_from_block_mask(
+        source128,
+        batch=2,
+        query_heads=4,
+        kv_heads=2,
+        query_length=q_len,
+        kv_length=kv_len,
+        source_block=128,
+    )
+    expected128 = _radial_expected(source128.bool(), 128, q_len, kv_len)
+    recovered128 = radial_plan_mask(plan128)
+    assert torch.equal(recovered128[0, 0], expected128)
+    assert torch.equal(recovered128, recovered128[0:1, 0:1].expand_as(recovered128))
+    # Row zero selects the physical final KV64 and leaves unused LUT slots;
+    # recovery must not let an unused false scatter erase that live tile.
+    assert bool(recovered128[0, 0, 0, -1])
+    direct = make_radial_plan_from_compute_mask(
+        expected128,
+        batch=1,
+        query_heads=1,
+        kv_heads=1,
+        query_length=q_len,
+        kv_length=kv_len,
+    )
+    assert torch.equal(radial_plan_mask(direct)[0, 0], expected128)
+
+    source64 = torch.zeros((5, 5), dtype=torch.bool)
+    source64[0, [0, 4]] = True
+    source64[1, 1] = True
+    source64[2, 2] = True
+    source64[3, 3] = True
+    source64[4, 4] = True
+    plan64 = make_radial_plan_from_block_mask(
+        source64,
+        batch=1,
+        query_heads=1,
+        kv_heads=1,
+        query_length=q_len,
+        kv_length=kv_len,
+        source_block=64,
+    )
+    expected64 = _radial_expected(source64, 64, q_len, kv_len)
+    assert torch.equal(radial_plan_mask(plan64)[0, 0], expected64)
+
+    torch.manual_seed(23)
+    q = torch.randn((1, 1, 129, 128), dtype=torch.float32) * 0.1
+    k = torch.randn_like(q) * 0.1
+    v = torch.randn_like(q) * 0.1
+    full = make_radial_plan_from_block_mask(
+        torch.ones((2, 2), dtype=torch.bool),
+        batch=1,
+        query_heads=1,
+        kv_heads=1,
+        query_length=129,
+        kv_length=129,
+        source_block=128,
+    )
+    actual = radial_attention_reference(q, k, v, full, tensor_layout="HND")
+    expected = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+    torch.testing.assert_close(actual, expected, atol=2e-6, rtol=0)
+    print(
+        "[PPU sparse plan] algorithm=radial Q128/KV64 "
+        "source128-K-expand=EXACT source64-Q-pair-OR=EXACT "
+        "mask_id-direct=EXACT LUT-roundtrip=EXACT broadcast=EXACT "
+        "dense-oracle=NUMERIC/PASS"
+    )
+
+    expect_red(
+        "radial-source-extent",
+        lambda: make_radial_plan_from_block_mask(
+            source128[:-1],
+            batch=1,
+            query_heads=1,
+            kv_heads=1,
+            query_length=q_len,
+            kv_length=kv_len,
+            source_block=128,
+        ),
+        "expected",
+    )
+    bad_delta = plan128.block_lut.clone()
+    bad_delta[0, 0, 0, 0] = plan128.kv_blocks
+    expect_red(
+        "radial-lut-delta",
+        lambda: replace(plan128, block_lut=bad_delta).validate(deep=True),
+        "out-of-range",
+    )
+    bad_count = plan128.valid_block_num.clone()
+    bad_count[0, 0, 0] -= 1
+    expect_red(
+        "radial-count-coverage",
+        lambda: replace(plan128, valid_block_num=bad_count).validate(deep=True),
+        "coverage",
+    )
+    empty = source128.bool().clone()
+    empty[1].zero_()
+    expect_red(
+        "radial-empty-row",
+        lambda: make_radial_plan_from_block_mask(
+            empty,
+            batch=1,
+            query_heads=1,
+            kv_heads=1,
+            query_length=q_len,
+            kv_length=kv_len,
+            source_block=128,
+        ),
+        "every Radial row",
+    )
+
+
 def main() -> int:
     test_bitset()
     test_h3()
     test_sol()
-    print("[PPU sparse plan] PASS: H3 top-k + Sol diag + 4 negative contracts")
+    test_radial()
+    print(
+        "[PPU sparse plan] PASS: H3 top-k + Sol diag + Radial LUT + "
+        "8 negative contracts"
+    )
     return 0
 
 

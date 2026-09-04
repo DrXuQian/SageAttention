@@ -13,8 +13,11 @@ import torch
 from sageattention import ppu_compile
 from sageattention.core import sageattn_qk_int8_pv_fp16_ppu
 from sageattention.ppu_sparse import (
+    make_radial_plan_from_block_mask,
+    make_radial_plan_from_compute_mask,
     make_h3_topk_plan,
     make_sol_plan,
+    sageattn_radial_ppu,
     sageattn_block_sparse_ppu,
 )
 from sageattention.ppu_sparse.plan import unpack_bits
@@ -97,6 +100,69 @@ def make_core(q, k, v, plan):
     return core, output
 
 
+def make_radial_fixture(seq: int, device: torch.device) -> torch.Tensor:
+    """Irregular operator fixture; Radial/Wan policy remains external."""
+    blocks = math.ceil(seq / 128)
+    mask = torch.zeros((blocks, blocks), dtype=torch.bool, device=device)
+    for row in range(blocks):
+        radius = 1 + row % 4
+        lo, hi = max(0, row - radius), min(blocks, row + radius + 1)
+        mask[row, lo:hi] = True
+        mask[row, 0] = True
+        if row % 3 == 0:
+            mask[row, blocks - 1] = True
+    return mask
+
+
+def make_radial_core(q, k, v, plan):
+    qi, qs, ki, ks = ppu_compile.quant_per_warp_int8(
+        q, k, None, tensor_layout="NHD"
+    )
+    vf = v.to(torch.float16).contiguous()
+    output = torch.empty_like(q)
+
+    def core():
+        ppu_compile.qk_int8_sv_f16_radial_accum_f32_attn(
+            qi,
+            ki,
+            vf,
+            output,
+            qs,
+            ks,
+            plan.block_lut,
+            plan.valid_block_num,
+            0,
+            q.shape[-1] ** -0.5,
+        )
+
+    return core, output
+
+
+def make_dense_core(q, k, v):
+    qi, qs, ki, ks = ppu_compile.quant_per_warp_int8(
+        q, k, None, tensor_layout="NHD"
+    )
+    vf = v.to(torch.float16).contiguous()
+    output = torch.empty_like(q)
+
+    def core():
+        ppu_compile.qk_int8_sv_f16_accum_f32_attn(
+            qi,
+            ki,
+            vf,
+            output,
+            qs,
+            ks,
+            0,
+            0,
+            2,
+            q.shape[-1] ** -0.5,
+            0,
+        )
+
+    return core, output
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch", type=int, default=1)
@@ -108,6 +174,12 @@ def main() -> int:
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--samples", type=int, default=7)
     parser.add_argument("--launches", type=int, default=10)
+    parser.add_argument("--radial-mask", type=str)
+    parser.add_argument(
+        "--radial-mask-kind",
+        choices=("compute", "source64", "source128"),
+        default="compute",
+    )
     args = parser.parse_args()
     if args.heads <= 0 or args.kv_heads <= 0 or args.heads % args.kv_heads:
         parser.error("heads must be positive and divisible by kv-heads")
@@ -131,6 +203,7 @@ def main() -> int:
     dense_output = torch.empty_like(q)
     h3_output = torch.empty_like(q)
     sol_output = torch.empty_like(q)
+    radial_output = torch.empty_like(q)
 
     def dense():
         nonlocal dense_output
@@ -146,6 +219,46 @@ def main() -> int:
     )
     h3_core, h3_core_output = make_core(q, k, v, h3_plan)
     sol_core, sol_core_output = make_core(q, k, v, sol_plan)
+    if args.radial_mask:
+        radial_source = torch.load(
+            args.radial_mask, map_location=q.device, weights_only=True
+        )
+        if not isinstance(radial_source, torch.Tensor):
+            raise TypeError("--radial-mask must contain one Tensor")
+        if args.radial_mask_kind == "compute":
+            radial_plan = make_radial_plan_from_compute_mask(
+                radial_source,
+                batch=args.batch,
+                query_heads=args.heads,
+                kv_heads=args.kv_heads,
+                query_length=args.seq,
+                kv_length=args.seq,
+            )
+        else:
+            radial_plan = make_radial_plan_from_block_mask(
+                radial_source,
+                batch=args.batch,
+                query_heads=args.heads,
+                kv_heads=args.kv_heads,
+                query_length=args.seq,
+                kv_length=args.seq,
+                source_block=64 if args.radial_mask_kind == "source64" else 128,
+            )
+        radial_mask_label = f"file:{args.radial_mask_kind}"
+    else:
+        radial_source = make_radial_fixture(args.seq, q.device)
+        radial_plan = make_radial_plan_from_block_mask(
+            radial_source,
+            batch=args.batch,
+            query_heads=args.heads,
+            kv_heads=args.kv_heads,
+            query_length=args.seq,
+            kv_length=args.seq,
+            source_block=128,
+        )
+        radial_mask_label = "synthetic-nonuniform"
+    radial_core, radial_core_output = make_radial_core(q, k, v, radial_plan)
+    dense_core, dense_core_output = make_dense_core(q, k, v)
 
     def h3_preplanned():
         nonlocal h3_output
@@ -157,6 +270,17 @@ def main() -> int:
         nonlocal sol_output
         sol_output = sageattn_block_sparse_ppu(
             q, k, v, sol_plan, tensor_layout="NHD"
+        )
+
+    def radial_preplanned():
+        nonlocal radial_output
+        radial_output = sageattn_radial_ppu(
+            q,
+            k,
+            v,
+            radial_plan,
+            tensor_layout="NHD",
+            smooth_k=False,
         )
 
     # Planner timings stand alone: Python/Torch route generation is not hidden
@@ -194,15 +318,32 @@ def main() -> int:
     )
 
     dense_values = measure_us(dense, args.warmup, args.samples, args.launches)
+    dense_core_values = measure_us(
+        dense_core, args.warmup, args.samples, args.launches
+    )
     h3_core_values = measure_us(h3_core, args.warmup, args.samples, args.launches)
     h3_values = measure_us(h3_preplanned, args.warmup, args.samples, args.launches)
     sol_core_values = measure_us(sol_core, args.warmup, args.samples, args.launches)
     sol_values = measure_us(sol_preplanned, args.warmup, args.samples, args.launches)
+    radial_core_values = measure_us(
+        radial_core, args.warmup, args.samples, args.launches
+    )
+    radial_values = measure_us(
+        radial_preplanned, args.warmup, args.samples, args.launches
+    )
     dense()
+    dense_core()
     h3_preplanned()
     sol_preplanned()
+    radial_preplanned()
     torch.cuda.synchronize()
     dense_us = report("dense-quant+core", dense_values, dense_flops, dense_output)
+    dense_core_us = report(
+        "dense-prequantized-core",
+        dense_core_values,
+        dense_flops,
+        dense_core_output,
+    )
     h3_core_us = report(
         "h3-prequantized-core",
         h3_core_values,
@@ -223,13 +364,32 @@ def main() -> int:
     sol_us = report(
         "sol-preplanned-quant+core", sol_values, dense_flops, sol_output
     )
+    radial_density = radial_plan.selected_tiles / radial_plan.block_lut.numel()
+    radial_core_us = report(
+        "radial-prequantized-core",
+        radial_core_values,
+        dense_flops,
+        radial_core_output,
+        f"exact_density={radial_density:.6f} mask={radial_mask_label}",
+    )
+    radial_us = report(
+        "radial-preplanned-quant+core",
+        radial_values,
+        dense_flops,
+        radial_output,
+        f"exact_density={radial_density:.6f} mask={radial_mask_label}",
+    )
     print(
         f"[PPU sparse perf verdict] h3_core_speedup={dense_us / h3_core_us:.3f}x "
         f"h3_preplanned_speedup={dense_us / h3_us:.3f}x "
         f"h3_with_plan_model={dense_us / (h3_us + statistics.median(h3_plan_samples)):.3f}x "
         f"sol_core_speedup={dense_us / sol_core_us:.3f}x "
         f"sol_preplanned_speedup={dense_us / sol_us:.3f}x "
-        f"sol_with_plan_model={dense_us / (sol_us + statistics.median(sol_plan_samples)):.3f}x"
+        f"sol_with_plan_model={dense_us / (sol_us + statistics.median(sol_plan_samples)):.3f}x "
+        f"radial_core_speedup={dense_core_us / radial_core_us:.3f}x "
+        f"radial_preplanned_speedup={dense_us / radial_us:.3f}x "
+        f"radial_density={radial_density:.6f} "
+        f"radial_density_efficiency={(dense_core_us / radial_core_us) * radial_density:.3f}"
     )
     return 0
 

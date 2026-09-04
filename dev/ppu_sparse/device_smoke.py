@@ -12,9 +12,12 @@ import torch
 from sageattention import ppu_compile
 from sageattention.core import sageattn_qk_int8_pv_fp16_ppu
 from sageattention.ppu_sparse import (
+    make_radial_plan_from_block_mask,
     make_h3_topk_plan,
     make_sol_plan,
+    quantized_radial_attention_reference,
     quantized_sparse_attention_reference,
+    sageattn_radial_ppu,
     sageattn_block_sparse_ppu,
 )
 
@@ -156,6 +159,66 @@ def run_negative() -> None:
     raise AssertionError("mutated sparse plan was not rejected")
 
 
+def run_radial() -> None:
+    torch.manual_seed(4128)
+    q = torch.randn((1, 2, 257, 128), device="cuda", dtype=torch.bfloat16) * 0.2
+    k = torch.randn((1, 1, 257, 128), device="cuda", dtype=torch.bfloat16) * 0.2
+    v = torch.randn_like(k) * 0.2
+    # This is an operator fixture, not a reimplementation of Wan's routing
+    # policy.  It deliberately has unequal row lengths and includes the K tail.
+    source = torch.tensor(
+        [[1, 0, 1], [1, 1, 0], [0, 1, 1]],
+        device="cuda",
+        dtype=torch.int8,
+    )
+    plan = make_radial_plan_from_block_mask(
+        source,
+        batch=1,
+        query_heads=2,
+        kv_heads=1,
+        query_length=257,
+        kv_length=257,
+        source_block=128,
+    )
+    actual = sageattn_radial_ppu(
+        q, k, v, plan, tensor_layout="HND", smooth_k=False
+    )
+    qi, qs, ki, ks, _, vf = operands(q, k, v, "HND")
+    expected = quantized_radial_attention_reference(
+        qi, qs, ki, ks, vf, plan, tensor_layout="HND"
+    )
+    error = (actual.float() - expected.float()).abs().max().item()
+    first = actual.clone()
+    for _ in range(3):
+        replay = sageattn_radial_ppu(
+            q, k, v, plan, tensor_layout="HND", smooth_k=False
+        )
+        torch.cuda.synchronize()
+        if not torch.equal(first, replay):
+            raise AssertionError("Radial sparse replay fingerprint is unstable")
+    print(
+        "[PPU sparse device] role=radial-lut "
+        "shape=B1,N257,Hq2,Hkv1,D128 source=K128 "
+        f"selected_kv64={plan.selected_tiles}/{plan.block_lut.numel()} "
+        f"max_quant_oracle={error:.8f} fingerprint={fingerprint(actual)} "
+        "replay=RAW-BIT/STABLE"
+    )
+    if error > 0.01:
+        raise AssertionError("Radial path disagrees with its quantized oracle")
+
+    bad_lut = plan.block_lut.clone()
+    bad_lut[0, 0, 0, 0] = plan.kv_blocks
+    bad = replace(plan, block_lut=bad_lut)
+    try:
+        sageattn_radial_ppu(q, k, v, bad, tensor_layout="HND")
+    except ValueError as error_value:
+        if "not deeply admitted" not in str(error_value):
+            raise
+        print("[PPU sparse negative] plant=radial-unadmitted-lut EXPECTED-RED/PASS")
+    else:
+        raise AssertionError("mutated Radial LUT was not rejected")
+
+
 def main() -> int:
     if not torch.cuda.is_available():
         print("[PPU sparse device] FAIL: torch device runtime unavailable", file=sys.stderr)
@@ -165,9 +228,10 @@ def main() -> int:
     run_h3_summary()
     run_sol_summary()
     run_negative()
+    run_radial()
     print(
         "[PPU sparse device] PASS: dense identity + H3 top-k summary + "
-        "Sol diag summary + tail/GQA/layout/replay"
+        "Sol diag summary + Radial LUT + tail/GQA/layout/replay"
     )
     return 0
 

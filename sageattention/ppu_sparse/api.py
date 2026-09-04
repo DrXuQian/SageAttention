@@ -8,6 +8,7 @@ import torch
 
 from .plan import SparseAttentionPlan
 from .planners import make_h3_topk_plan, make_sol_plan
+from .radial import RadialAttentionPlan
 
 
 def _shape_contract(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, layout: str):
@@ -134,6 +135,84 @@ def sageattn_block_sparse_ppu(
     return output
 
 
+def sageattn_radial_ppu(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    plan: RadialAttentionPlan,
+    *,
+    tensor_layout: str = "HND",
+    sm_scale: Optional[float] = None,
+    smooth_k: bool = True,
+    return_lse: bool = False,
+):
+    """Run the dedicated PPU SparseSage2/Radial forward executor.
+
+    Radial owns mask policy.  This operator starts at its Q128/KV64
+    incremental-LUT boundary and deliberately does not route through the
+    generic H3/Sol summary executor.
+    """
+    try:
+        from .. import ppu_compile
+    except ImportError as error:
+        raise RuntimeError("PPU SageAttention extension is not installed") from error
+
+    if any(x.dtype != torch.bfloat16 for x in (q, k, v)):
+        raise TypeError("the first PPU Radial path requires bf16 Q/K/V")
+    if q.device != k.device or q.device != v.device:
+        raise ValueError("PPU Radial Q/K/V must share one device")
+    if q.ndim != 4 or k.ndim != 4 or v.ndim != 4:
+        raise ValueError("PPU Radial Q/K/V must be rank-4")
+    batch, q_len, kv_len, q_heads, kv_heads, head_dim, seq_dim = _shape_contract(
+        q, k, v, tensor_layout
+    )
+    if q.stride(-1) != 1 or k.stride(-1) != 1 or v.stride(-1) != 1:
+        raise ValueError("PPU Radial requires contiguous head dimensions")
+    identity = (
+        plan.batch,
+        plan.query_length,
+        plan.kv_length,
+        plan.query_heads,
+        plan.kv_heads,
+        plan.head_dim,
+    )
+    if identity != (batch, q_len, kv_len, q_heads, kv_heads, head_dim):
+        raise ValueError("Radial plan identity does not match Q/K/V")
+    plan.validate(deep=False)
+    if not plan.admitted:
+        raise ValueError(
+            "Radial plan was not deeply admitted; call plan.validate(deep=True)"
+        )
+    if plan.block_lut.device != q.device:
+        raise ValueError("Radial plan and Q/K/V must share one device")
+    if return_lse:
+        raise ValueError("the first PPU Radial path does not publish LSE")
+    if sm_scale is None:
+        sm_scale = head_dim ** -0.5
+
+    # Subtracting the same mean from every K leaves softmax probabilities and
+    # O unchanged.  With no LSE publication, no host correction is needed.
+    km = k.mean(dim=seq_dim) if smooth_k else None
+    q_int8, q_scale, k_int8, k_scale = ppu_compile.quant_per_warp_int8(
+        q, k, km, tensor_layout=tensor_layout
+    )
+    value_fp16 = v.to(torch.float16).contiguous()
+    output = torch.empty_like(q)
+    ppu_compile.qk_int8_sv_f16_radial_accum_f32_attn(
+        q_int8,
+        k_int8,
+        value_fp16,
+        output,
+        q_scale,
+        k_scale,
+        plan.block_lut,
+        plan.valid_block_num,
+        0 if tensor_layout == "NHD" else 1,
+        float(sm_scale),
+    )
+    return output
+
+
 def sageattn_h3_topk_ppu(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -205,5 +284,6 @@ def sageattn_sol_ppu(
 __all__ = [
     "sageattn_block_sparse_ppu",
     "sageattn_h3_topk_ppu",
+    "sageattn_radial_ppu",
     "sageattn_sol_ppu",
 ]

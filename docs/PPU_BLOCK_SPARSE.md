@@ -1,5 +1,62 @@
 # PPU block-sparse SageAttention
 
+## Dedicated RadialAttention path
+
+RadialAttention is not executed by translating its mask into the generic
+H3/Sol CSR+summary kernel.  Its production backend is SparseSageAttention2,
+so the PPU implementation has a separate operator with the same execution
+boundary:
+
+- one delta-coded `block_lut[B,H,Q128,KV64]` and one
+  `valid_block_num[B,H,Q128]` tensor;
+- `Q128/KV64`, D128, eight warps for the FP16-V specialization (one Q16 tile
+  per warp);
+- Q loaded once for the LUT row, K/V advanced by LUT deltas and pipelined,
+  with online softmax and PV in the same loop;
+- no summary branch and no Radial/Wan routing policy inside the kernel.
+
+`make_radial_plan_from_compute_mask` directly accepts the non-SM90
+SparseSageAttention2 `mask_id` that Radial already produces.  For integrations
+that still hold Radial's square policy mask,
+`make_radial_plan_from_block_mask` reproduces the published conversion:
+K128 columns expand to two KV64 columns, while adjacent Q64 rows are OR-paired
+into Q128 rows.  Both conversions and the LUT roundtrip are independently
+host-anchored.
+
+```python
+from sageattention import (
+    make_radial_plan_from_compute_mask,
+    sageattn_radial_ppu,
+)
+
+plan = make_radial_plan_from_compute_mask(
+    converted_mask,  # [B, Hq, ceil(Nq/128), ceil(Nkv/64)]
+    batch=q.shape[0], query_heads=q.shape[1], kv_heads=k.shape[1],
+    query_length=q.shape[2], kv_length=k.shape[2], head_dim=128,
+)
+out = sageattn_radial_ppu(q, k, v, plan, tensor_layout="HND")
+```
+
+The PPU specialization deliberately differs from current NVIDIA
+SparseSageAttention2 in two hardware-facing details: V remains FP16 instead
+of FP8, and PPU AIU cube loads replace CUDA cooperative-copy/PTX machinery.
+The mask semantics, work decomposition and online recurrence are aligned;
+performance parity is a device measurement, not inferred from that alignment.
+The first shipping boundary is forward-only BF16 Q/K/V, BF16 output, D128,
+non-causal, and no LSE/PV-threshold result.
+
+Local admission builds the exact PPU TU and reads its generated code:
+
+```bash
+PPU_SDK=/path/to/PPU_SDK \
+  bash dev/ppu_sparse/build_radial_ppu.sh
+```
+
+The current generated specialization is stack-free, uses 188 vector
+registers, and contains the exact 16 INT8 QK MMAs, 32 FP32-accumulating PV
+MMAs and four accumulator-to-PV bridge MMAs implied by one Q128/KV64 visit.
+Those are artifact checks, not source assertions.
+
 The first PPU sparse forward has one executor and two routing front ends.  It
 does not turn either community algorithm into a dense boolean mask.
 
