@@ -101,15 +101,25 @@ were stable.
 The semantic-reference planners cost 871.080 us (H3) and 982.000 us (Sol),
 so planning on every invocation reverses both wins to 0.479x and 0.458x.  The
 hard per-invocation planning budgets for merely beating dense are therefore
-236.680 us for H3 and 291.696 us for Sol.  This localizes the next production
-work: preserve the admitted `SparseAttentionPlan` contract and replace route
-generation, rather than rewriting the proven sparse executor.  The exact-tile
-density is not a complete work fraction because summary rows also execute.
+236.680 us for H3 and 291.696 us for Sol.  These numbers define the budget for
+an integrating framework, not work owned by this repository: production route
+generation may come from ComfyUI/Triton or another policy layer.  This project
+owns the actlize/CUTLASS executor beginning at the admitted
+`SparseAttentionPlan` boundary.  The Python planners remain semantic oracles
+and admission fixtures; they are not claimed as a production routing path.
+The exact-tile density is not a complete work fraction because summary rows
+also execute.
 
 Performance output keeps three costs separate: planner, prequantized sparse
 core, and preplanned quantization-plus-core.  The current Python/Torch Sol
 planner materializes its route score matrix; it is the semantic reference and
 first device baseline, not the final long-sequence routing implementation.
+
+ComfyUI's Sol-Attn production path is a Triton implementation that performs
+routing inside its forward kernel.  It is intentionally not vendored or
+reimplemented here.  Framework integration is expected to lower its routing
+decision into this executor's explicit metadata contract, or select a separate
+Triton backend outside the CUTLASS operator package.
 
 ## Sources of semantics
 
