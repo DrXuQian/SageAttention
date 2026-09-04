@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "artifact": "_qattn_ppu.cpython-312-x86_64-linux-gnu.so",
-  "artifact_sha256": "19135aeba7e65b8893d614c16c4ea66cdd9534dd2fe9227ea65c5ce5def157fc",
-  "artifact_size": 1051632,
+  "artifact_sha256": "6613a6d26001de7235b62e757a5216da7d400c13fdcf7ab9ab6dd139ebd142bd",
+  "artifact_size": 805264,
   "build": {
-    "source_git_commit": "5ce0ef96f2ead043f451640bb62e2cd4c2732bc0",
+    "source_git_commit": "893d2e22b59d1e2b8c9f03e84fa52a7f75693ae0",
     "actlize_git_commit": "9d063e4c5fde5119d4d68bfbe124aacd8ed2ec88",
     "ppu_arch": "ppu_10",
     "ppu_sdk_release": "2.1.1-a5c56e",
@@ -15,15 +15,9 @@
     "cxx11_abi": true
   },
   "resource_evidence": {
-    "specializations": 33,
+    "specializations": 28,
     "max_vector_registers": 256,
-    "nonzero_private_frames": [8, 8],
-    "radial": {
-      "vector_registers": 188,
-      "scalar_registers": 96,
-      "private_frame_bytes": 0,
-      "geometry": "Q128/KV64/8warp"
-    },
+    "nonzero_private_frames": [],
     "scope": "measured locally from the exact artifact with hgobjdump"
   },
   "required_ppu_runtime_libraries": [
@@ -33,13 +27,11 @@
     "libhg_wrapper.so"
   ],
   "source_sha256": {
-    "setup_ppu.py": "9d92e741e42b03e2ca006b83f47fe9155f5961f983df588a817202b45ae6de7c",
-    "csrc/qattn/ppu/attn_ppu.h": "e2d0f146b25ebd734e673973d58a53ebc286286169be5e7492a0b02c10b36d6a",
+    "setup_ppu.py": "51f4e64615a7d16747c6df585ae0d235410e37c6893865b142188e7f9655646e",
+    "csrc/qattn/ppu/attn_ppu.h": "1774c38c9b3f8c1630ccea303340a80ea7f7c978d94403a01ff343e434531bd6",
     "csrc/qattn/ppu/attn_ppu_layout.cuh": "07388b773e79055b0b8f94e85e76b3745a3844dd533c89521fcb4acfb51484b5",
     "csrc/qattn/ppu/attn_ppu_ops.cuh": "b63cc46b983e2418c29f2d8598a43083f8c5c132e5a0a1f19119dc5e151751d7",
-    "csrc/qattn/ppu/block_sparse_ppu.cu": "d5bcdc1637101c9c895e19e22c47d0ed77c2cb7534203ed07394e26564e4c4e2",
-    "csrc/qattn/ppu/radial_sparse_ppu.cu": "c6003f48937da9b6807c3cbf69464a290fac6c45a40d956d4ae2fff913b40f07",
-    "csrc/qattn/ppu/pybind_ppu.cpp": "15351662f0da109ea609faf0ce15747bd50306200e67ce5c97b069b8164addae",
+    "csrc/qattn/ppu/pybind_ppu.cpp": "b6765c8257e4e9fc954b6fbbc277f8d08251fd4b331d2398d3204bd7955db01a",
     "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu": "9a37aac82f930a5dcdf634729fe5bfa7b972b2512a87602c3b429abe12eec94c",
     "csrc/qattn/ppu/quant_ppu.cu": "806d40e1f1f0519fe34460d027078de7fae6e218fe112e1a4d3e6354b0ce4121"
   }
