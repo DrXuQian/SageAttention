@@ -19,6 +19,7 @@ from .radial_reference import (
     radial_attention_reference,
 )
 from .api import (
+    block_sparse_sage2_attn_ppu,
     sageattn_block_sparse_ppu,
     sageattn_h3_topk_ppu,
     sageattn_radial_ppu,
@@ -41,6 +42,7 @@ __all__ = [
     "quantized_radial_attention_reference",
     "radial_attention_reference",
     "sageattn_block_sparse_ppu",
+    "block_sparse_sage2_attn_ppu",
     "sageattn_h3_topk_ppu",
     "sageattn_radial_ppu",
     "sageattn_sol_ppu",

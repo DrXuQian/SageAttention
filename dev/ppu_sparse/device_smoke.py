@@ -12,11 +12,13 @@ import torch
 from sageattention import ppu_compile
 from sageattention.core import sageattn_qk_int8_pv_fp16_ppu
 from sageattention.ppu_sparse import (
+    block_sparse_sage2_attn_ppu,
     make_radial_plan_from_block_mask,
     make_h3_topk_plan,
     make_sol_plan,
     quantized_radial_attention_reference,
     quantized_sparse_attention_reference,
+    radial_plan_mask,
     sageattn_radial_ppu,
     sageattn_block_sparse_ppu,
 )
@@ -183,6 +185,20 @@ def run_radial() -> None:
     actual = sageattn_radial_ppu(
         q, k, v, plan, tensor_layout="HND", smooth_k=False
     )
+    mask_id = radial_plan_mask(plan)
+    adapter = block_sparse_sage2_attn_ppu(
+        q,
+        k,
+        v,
+        mask_id,
+        tensor_layout="HND",
+        smooth_k=False,
+    )
+    adapter_bad = int(
+        (actual.view(torch.int16) != adapter.view(torch.int16)).sum().item()
+    )
+    if adapter_bad:
+        raise AssertionError("SparseSage2-compatible adapter changed Radial output")
     qi, qs, ki, ks, _, vf = operands(q, k, v, "HND")
     expected = quantized_radial_attention_reference(
         qi, qs, ki, ks, vf, plan, tensor_layout="HND"
@@ -201,7 +217,7 @@ def run_radial() -> None:
         "shape=B1,N257,Hq2,Hkv1,D128 source=K128 "
         f"selected_kv64={plan.selected_tiles}/{plan.block_lut.numel()} "
         f"max_quant_oracle={error:.8f} fingerprint={fingerprint(actual)} "
-        "replay=RAW-BIT/STABLE"
+        f"adapter_raw_bad={adapter_bad} replay=RAW-BIT/STABLE"
     )
     if error > 0.01:
         raise AssertionError("Radial path disagrees with its quantized oracle")

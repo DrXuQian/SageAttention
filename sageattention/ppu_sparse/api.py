@@ -8,7 +8,10 @@ import torch
 
 from .plan import SparseAttentionPlan
 from .planners import make_h3_topk_plan, make_sol_plan
-from .radial import RadialAttentionPlan
+from .radial import (
+    RadialAttentionPlan,
+    make_radial_plan_from_compute_mask,
+)
 
 
 def _shape_contract(q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, layout: str):
@@ -213,6 +216,51 @@ def sageattn_radial_ppu(
     return output
 
 
+def block_sparse_sage2_attn_ppu(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    mask_id: torch.Tensor,
+    dropout_p: float = 0.0,
+    scale: Optional[float] = None,
+    smooth_k: bool = True,
+    tensor_layout: str = "HND",
+    return_sparsity: bool = False,
+):
+    """PPU adapter for Radial's existing SparseSage2 operator boundary.
+
+    ``mask_id`` is Radial's already-converted non-SM90 Q128/KV64 mask.  Mask
+    generation and dense-layer/timestep policy remain owned by Radial.
+    """
+    if dropout_p != 0:
+        raise ValueError("PPU Radial forward does not support dropout")
+    batch, q_len, kv_len, q_heads, kv_heads, head_dim, _ = _shape_contract(
+        q, k, v, tensor_layout
+    )
+    plan = make_radial_plan_from_compute_mask(
+        mask_id,
+        batch=batch,
+        query_heads=q_heads,
+        kv_heads=kv_heads,
+        query_length=q_len,
+        kv_length=kv_len,
+        head_dim=head_dim,
+    )
+    output = sageattn_radial_ppu(
+        q,
+        k,
+        v,
+        plan,
+        tensor_layout=tensor_layout,
+        sm_scale=scale,
+        smooth_k=smooth_k,
+    )
+    if return_sparsity:
+        sparsity = 1.0 - plan.selected_tiles / plan.block_lut.numel()
+        return output, sparsity
+    return output
+
+
 def sageattn_h3_topk_ppu(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -282,6 +330,7 @@ def sageattn_sol_ppu(
 
 
 __all__ = [
+    "block_sparse_sage2_attn_ppu",
     "sageattn_block_sparse_ppu",
     "sageattn_h3_topk_ppu",
     "sageattn_radial_ppu",

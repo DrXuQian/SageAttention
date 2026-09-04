@@ -23,6 +23,11 @@ K128 columns expand to two KV64 columns, while adjacent Q64 rows are OR-paired
 into Q128 rows.  Both conversions and the LUT roundtrip are independently
 host-anchored.
 
+For the current Radial call site, `block_sparse_sage2_attn_ppu` is the direct
+adapter: it accepts the same Q/K/V plus converted `mask_id`, constructs the
+admitted plan, and invokes the dedicated kernel.  It rejects nonzero dropout
+instead of silently changing semantics.
+
 ```python
 from sageattention import (
     make_radial_plan_from_compute_mask,
