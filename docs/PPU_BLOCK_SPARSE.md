@@ -50,6 +50,19 @@ performance parity is a device measurement, not inferred from that alignment.
 The first shipping boundary is forward-only BF16 Q/K/V, BF16 output, D128,
 non-causal, and no LSE/PV-threshold result.
 
+The performance runner compares prequantized Radial core time with the
+prequantized dense core on the same operands.  It reports
+`density_efficiency = speedup * selected_KV64_density`; the preregistered
+classification is `ALIGNED >= 0.85`, `PARTIAL >= 0.70`, otherwise
+`NOT-ALIGNED`.  Its built-in mask is an explicitly labelled irregular
+operator fixture.  A real Radial `mask_id` can replace it without code changes:
+
+```bash
+RADIAL_MASK=/workspace/wan-radial-mask.pt RADIAL_MASK_KIND=compute \
+  OUT=/workspace/sageattention-radial-real \
+  bash tools/run_ppu_sparse_box.sh
+```
+
 Local admission builds the exact PPU TU and reads its generated code:
 
 ```bash

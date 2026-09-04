@@ -379,6 +379,13 @@ def main() -> int:
         radial_output,
         f"exact_density={radial_density:.6f} mask={radial_mask_label}",
     )
+    radial_efficiency = (dense_core_us / radial_core_us) * radial_density
+    if radial_efficiency >= 0.85:
+        radial_alignment = "ALIGNED"
+    elif radial_efficiency >= 0.70:
+        radial_alignment = "PARTIAL"
+    else:
+        radial_alignment = "NOT-ALIGNED"
     print(
         f"[PPU sparse perf verdict] h3_core_speedup={dense_us / h3_core_us:.3f}x "
         f"h3_preplanned_speedup={dense_us / h3_us:.3f}x "
@@ -389,7 +396,9 @@ def main() -> int:
         f"radial_core_speedup={dense_core_us / radial_core_us:.3f}x "
         f"radial_preplanned_speedup={dense_us / radial_us:.3f}x "
         f"radial_density={radial_density:.6f} "
-        f"radial_density_efficiency={(dense_core_us / radial_core_us) * radial_density:.3f}"
+        f"radial_density_efficiency={radial_efficiency:.3f} "
+        f"radial_core_alignment={radial_alignment} "
+        "thresholds=ALIGNED>=0.85/PARTIAL>=0.70"
     )
     return 0
 
