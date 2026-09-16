@@ -189,6 +189,40 @@ layout error.
 
 ## PPU0010 device verdict (2026-09-03)
 
+### Same-input BF16 FlashAttention comparison
+
+`tools/run_ppu_sage_bf16_ab.sh` uses the installed **post1** Sage wheel and an
+installed `flash_attn_2_cuda`. It never builds, copies an old source-tree `.so`,
+or falls back to SDPA. It rotates three sequential event-timed arms on the same
+BF16 Q/K/V: native FA2 BF16 forward, prequantized Sage core, and Sage Q/K
+quantization + V cast + core. Outputs are BF16; Sage's internal V remains FP16.
+Input/output/quantization buffers are preallocated; FA's internal LSE/RNG buffer
+bookkeeping remains inside its native forward call. Kernel spans include host
+launch idle and are not profiler-derived device-only durations.
+
+```bash
+# Historical attention SHAPE, newly measured BF16 comparison (not the old FP16 run):
+bash tools/run_ppu_sage_bf16_ab.sh
+# The earlier MiniMax H3 attention shape; one launch/sample avoids a long run:
+HEADS=56 SEQ=73774 LAUNCHES=1 WARMUP=2 bash tools/run_ppu_sage_bf16_ab.sh
+# Optional matched causal comparison:
+CAUSAL=1 bash tools/run_ppu_sage_bf16_ab.sh
+```
+
+Default: B1/H16/S4096/D128, full attention. Both arms use NHD, unlike the old
+FP16/HND Sage anchor below. No historical timing is relabelled as a BF16 baseline.
+Q/K smoothing is off. Per-role raw samples, binary hashes, device identity and
+quantization-error diagnostics are written to `/workspace/.../result.json`.
+Overlapping min/max envelopes are UNRESOLVED. Replay/error checks are sampled
+and do not constitute a new whole-domain correctness proof. MFU is explicitly
+**BF16-equivalent** normalization, not mixed INT8/FP16 hardware SOL.
+If FA is available only in an earlier build, set `FA_PYTHONPATH` to that native
+runtime directory plus its matching `flash-attention-for-sail` source directory.
+CPU plan/arithmetic contracts are in `dev/ppu_int8/check_sage_bf16_bench.py`;
+device performance must be measured on the box.
+
+### Recorded FP16-input result
+
 The prebuilt extension from `44a641a` (SHA256
 `059c9948f439abc1663103a3279a02ed7c40d598606b42895b307fb13fbe4168`)
 passed all four numeric admissions.  The worst output error was
