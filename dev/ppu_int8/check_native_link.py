@@ -24,6 +24,13 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 assert all(hasattr(module, name) for name in (
     'qk_int8_sv_f16_accum_f32_attn', 'quant_per_block_int8', 'quant_per_warp_int8'))
+try:
+    module.quant_per_warp_int8(torch.zeros((1,1,32,64), dtype=torch.float16),
+        torch.empty((1,1,32,64), dtype=torch.int8), torch.ones((1,1,1)), 128, 32, 0)
+except RuntimeError as error:
+    assert 'must be device tensors' in str(error), str(error)
+else:
+    raise AssertionError('CPU input must be rejected before a device launch')
 print('NATIVE_IMPORT_PASS', torch.__version__)
 """
 
