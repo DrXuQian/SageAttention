@@ -21,6 +21,6 @@ if pathlib.Path(filename).name != filename:
 wheel = root / filename
 if not wheel.is_file() or hashlib.sha256(wheel.read_bytes()).hexdigest() != release['wheel_sha256']:
     raise SystemExit('Wheel missing or SHA256 mismatch; fetch the complete artifact branch.')
-subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-deps', '--force-reinstall', str(wheel)], check=True)
+subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-index', '--no-deps', '--force-reinstall', str(wheel)], check=True)
 print('Installed', release['version'], '; import from outside any SageAttention source checkout.')
 PY

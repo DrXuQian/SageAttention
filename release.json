@@ -1,20 +1,24 @@
 {
   "schema": 1,
   "package": "sageattention",
-  "version": "2.2.0+ppu.torch29",
-  "wheel": "sageattention-2.2.0+ppu.torch29-cp312-cp312-linux_x86_64.whl",
-  "wheel_sha256": "d3436d0d268d9f5975defae90acecff381e9338db54d0b6db74acc0b11510ef2",
-  "package_source_sha": "4ca7d9f6508c8e885ec898fc2f782b933391387a",
-  "native_sha256": "6613a6d26001de7235b62e757a5216da7d400c13fdcf7ab9ab6dd139ebd142bd",
-  "native_build_source_sha": "893d2e22b59d1e2b8c9f03e84fa52a7f75693ae0",
+  "version": "2.2.0.post1+ppu.torch29",
+  "wheel": "sageattention-2.2.0.post1+ppu.torch29-cp312-cp312-linux_x86_64.whl",
+  "wheel_sha256": "70409a902755efcbff7d06124ad871b627ad9e59ad448c8e69f2e4d5fba9f366",
+  "package_source_sha": "11a60bf01e660ddf8ba835a3a7b5ce0bafd01021",
+  "native_sha256": "507f9b00b39ca4887ce2114284539fcd70583157fbef78df2f40b850345ab5c9",
+  "native_build_source_sha": "11a60bf01e660ddf8ba835a3a7b5ce0bafd01021",
   "actlize_sha": "9d063e4c5fde5119d4d68bfbe124aacd8ed2ec88",
   "target": "PPU0010, Python 3.12, Torch 2.9.0, C++11 ABI=1",
   "storage": "ordinary Git on dedicated artifact branch; no LFS",
-  "scope": "Verified prebuilt repack; native payload unchanged; no new device run",
+  "scope": "Runtime-link fix; all 28 device kernel instruction streams unchanged; no new device run",
+  "native_runtime": "libhggcrt.13.0.so; hidden bindings resist global legacy shim interposition",
   "local_checks": [
     "prebuilt source/actlize/target/hash verification",
     "wheel has exactly one native payload, matching size and SHA256",
     "pip --target installation",
-    "wrong Torch version, wrong C++ ABI, changed payload rejected"
+    "wrong Torch version, wrong C++ ABI, changed payload rejected",
+    "old wrapper and unbound direct-only relink both reproduce absent libhggcrt.12.0.so",
+    "new extension imports with legacy SDK shim globally preloaded; CPU tensor rejection crosses Torch ABI safely",
+    "28 kernels / 43024 device instructions unchanged; all spill stacks zero"
   ]
 }
