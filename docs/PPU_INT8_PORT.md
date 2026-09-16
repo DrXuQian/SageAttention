@@ -133,14 +133,14 @@ contract. The box receives an already-built wheel, not a rebuild command.
 
 The verified wheel is published on the independent
 [`ppu-wheels` artifact branch](https://github.com/DrXuQian/SageAttention/tree/ppu-wheels)
-at `26e6c0e`. It is an ordinary Git blob (no LFS required); `main` contains no new
+at `be05a56`. It is an ordinary Git blob (no LFS required); `main` contains no new
 wheel payload. The branch includes `release.json` and a checksum/ABI-verifying
 `install.sh`. Its exact filename is
-`sageattention-2.2.0+ppu.torch29-cp312-cp312-linux_x86_64.whl`, SHA256
-`d3436d0d268d9f5975defae90acecff381e9338db54d0b6db74acc0b11510ef2`.
+`sageattention-2.2.0.post1+ppu.torch29-cp312-cp312-linux_x86_64.whl`, SHA256
+`70409a902755efcbff7d06124ad871b627ad9e59ad448c8e69f2e4d5fba9f366`.
 
-`setup_ppu_wheel.py` repackages the exact dense-only
-`cpython312-torch2.9-cxx11abi1` prebuilt. It verifies the original source hashes,
+`setup_ppu_wheel.py` packages the exact dense-only SDK output for
+`cpython312-torch2.9-cxx11abi1`. It verifies the compiled source hashes,
 actlize gitlink, payload SHA256 and target ABI before copying that library into
 the wheel; it does **not** compile a replacement kernel. The packager's own Torch
 installation does not select the target ABI.
