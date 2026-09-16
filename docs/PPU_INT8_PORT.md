@@ -108,8 +108,15 @@ device measurement rather than being inferred from the resource improvement.
 
 ### Verified Torch 2.9 wheel
 
-The `ppu-wheels` artifact branch stores the installable wheel through Git LFS;
-source changes stay on `main`. `setup_ppu_wheel.py` repackages the exact dense-only
+Wheel publication targets a separate `ppu-wheels` artifact branch, not `main`.
+**Publication is currently blocked:** GitHub rejected the new LFS object with
+`can not upload new objects to public fork DrXuQian/SageAttention`.
+The wheel is locally built and installation-tested, but is not yet downloadable
+from that branch. Its exact filename is
+`sageattention-2.2.0+ppu.torch29-cp312-cp312-linux_x86_64.whl`, SHA256
+`d3436d0d268d9f5975defae90acecff381e9338db54d0b6db74acc0b11510ef2`.
+
+`setup_ppu_wheel.py` repackages the exact dense-only
 `cpython312-torch2.9-cxx11abi1` prebuilt. It verifies the original source hashes,
 actlize gitlink, payload SHA256 and target ABI before copying that library into
 the wheel; it does **not** compile a replacement kernel. The packager's own Torch
