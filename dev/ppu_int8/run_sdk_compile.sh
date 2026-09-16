@@ -102,5 +102,7 @@ python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
   "$out/shipping-isa.log"
 
 sha256sum "$extension" | tee "$out/binary.sha256"
+python "$repo/tools/make_ppu_manifest.py" --artifact "$extension" \
+  --sdk "$sdk" --resources "$out/resources.log"
 printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s; no device code executed\n' \
   "$attn_count" "$quant_count"

@@ -1,5 +1,6 @@
 include README.md
 include LICENSE
+include tools/ppu_native_link.py
 recursive-include sageattention *.py
 recursive-include csrc *.h *.hpp *.cuh *.cu *.cpp
 recursive-include sageattention/triton *.py

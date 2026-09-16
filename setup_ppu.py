@@ -13,6 +13,7 @@ from pathlib import Path
 import torch
 from setuptools import find_packages, setup
 import torch.utils.cpp_extension as torch_cpp_extension
+from tools.ppu_native_link import check_native_linkage, runtime_soname, wrapped_symbols
 
 
 ROOT = Path(__file__).resolve().parent
@@ -75,6 +76,9 @@ HGCC_FLAGS = [
 DEVICE_SOURCES = [
     ROOT / "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu",
     ROOT / "csrc/qattn/ppu/quant_ppu.cu",
+    # HGGC exposes its internal fatbinary registration declarations only in its
+    # native language mode. This TU emits host C-ABI bindings, no device kernel.
+    ROOT / "csrc/qattn/ppu/native_runtime.cpp",
 ]
 DEVICE_INCLUDES = [
     ROOT / "csrc" / "qattn" / "ppu",
@@ -85,10 +89,10 @@ DEVICE_INCLUDES = [
     *[Path(path) for path in torch_cpp_extension.include_paths()],
 ]
 PPU_LIB = Path(PPU_SDK) / "lib"
-PPU_LIBRARIES = ["hggc_wrapper", "hggcrt1", "hggc", "hg_wrapper"]
-for library in PPU_LIBRARIES:
-    if not (PPU_LIB / f"lib{library}.so").is_file():
-        raise RuntimeError(f"PPU runtime library is missing: {PPU_LIB}/lib{library}.so")
+NATIVE_RUNTIME = PPU_LIB / "libhggcrt1.so"
+RUNTIME_SONAME = runtime_soname(NATIVE_RUNTIME)
+RUNTIME_BINDINGS = ROOT / "csrc/qattn/ppu/native_runtime.cpp"
+HGCC_FLAGS.append(f'-DSAGE_PPU_RUNTIME_SONAME="{RUNTIME_SONAME}"')
 
 
 class PpuBuildExtension(torch_cpp_extension.BuildExtension):
@@ -112,6 +116,10 @@ class PpuBuildExtension(torch_cpp_extension.BuildExtension):
         for extension in self.extensions:
             extension.extra_objects = list(extension.extra_objects or []) + device_objects
         super().build_extensions()
+        for extension in self.extensions:
+            path = Path(self.get_ext_fullpath(extension.name))
+            evidence = check_native_linkage(path, RUNTIME_SONAME)
+            print(f"[PPU native linkage] {evidence}", flush=True)
 
 
 extension = torch_cpp_extension.CppExtension(
@@ -125,10 +133,10 @@ extension = torch_cpp_extension.CppExtension(
     ],
     extra_compile_args=CXX_FLAGS,
     library_dirs=[str(PPU_LIB)],
-    libraries=PPU_LIBRARIES,
     runtime_library_dirs=[str(PPU_LIB)],
     extra_link_args=[
-        "-Wl,--disable-new-dtags",
+        "-Wl,--no-as-needed", str(NATIVE_RUNTIME), "-Wl,--as-needed",
+        *[f"-Wl,--wrap={name}" for name in wrapped_symbols(RUNTIME_BINDINGS)],
         f"-Wl,-rpath,{PPU_LIB}",
         "-Wl,-rpath,$ORIGIN",
         "-ldl",

@@ -14,11 +14,13 @@ import sys
 
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
+from tools.ppu_native_link import check_native_linkage
 
 ROOT = Path(__file__).resolve().parent
 VARIANT = os.environ.get("SAGEATTENTION_PPU_WHEEL_VARIANT", "cpython312-torch2.9-cxx11abi1")
-directory = ROOT / "prebuilt/ppu_10" / VARIANT
-if directory.parent != ROOT / "prebuilt/ppu_10" or not (directory / "manifest.json").is_file():
+override = os.environ.get("SAGEATTENTION_PPU_PREBUILT_DIR")
+directory = Path(override).resolve() if override else ROOT / "prebuilt/ppu_10" / VARIANT
+if not (directory / "manifest.json").is_file():
     raise RuntimeError(f"unknown PPU prebuilt variant: {VARIANT}")
 manifest = json.loads((directory / "manifest.json").read_text())
 artifact = directory / manifest["artifact"]
@@ -29,11 +31,16 @@ target = manifest["build"]
 if sys.implementation.cache_tag != target["python_cache_tag"]:
     raise RuntimeError("wheel packager Python ABI differs from the selected prebuilt")
 verifier.verify(manifest, ROOT, artifact, target)
+linkage = manifest.get("native_runtime_linkage", {})
+if not linkage.get("soname"):
+    raise RuntimeError("Prebuilt lacks native-runtime linkage evidence; rebuild with setup_ppu.py")
+check_native_linkage(artifact, linkage["soname"])
 
 
 class VerifiedPrebuilt(build_ext):
     def run(self):
         verifier.verify(manifest, ROOT, artifact, target)
+        check_native_linkage(artifact, linkage["soname"])
         for extension in self.extensions:
             output = Path(self.get_ext_fullpath(extension.name))
             if output.name != artifact.name:
@@ -57,7 +64,7 @@ class VerifiedPrebuilt(build_ext):
 torch_tag = ".".join(target["torch_public_version"].split(".")[:2]).replace(".", "")
 setup(
     name="sageattention",
-    version=f"2.2.0+ppu.torch{torch_tag}",
+    version=f"2.2.0.post1+ppu.torch{torch_tag}",
     description="Dense actlize PPU SageAttention, verified prebuilt wheel",
     license="Apache-2.0",
     license_files=["LICENSE"],

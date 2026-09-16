@@ -108,6 +108,29 @@ device measurement rather than being inferred from the resource improvement.
 
 ### Verified Torch 2.9 wheel
 
+The original `2.2.0+ppu.torch29` wheel must not be used with the SDK 2.1.1
+13.0 runtime: it linked `libhggc_wrapper.so`, whose loader requests the absent
+`libhggcrt.12.0.so`. **Do not symlink 13.0 under the 12.0 name.** The replacement
+version is `2.2.0.post1+ppu.torch29`; only its host runtime binding changes.
+
+`setup_ppu.py` now reads the SDK runtime's actual ELF SONAME, keeps that direct
+dependency, and binds all ten HGGC registration/launch entry points through
+hidden wrappers and handle-scoped lookup. This remains correct if Torch has
+already loaded the SDK's old shim globally. The Torch/pybind extension itself
+is **not** deep-bound: its ATen/C++ objects retain the existing process ABI.
+The post-link gate rejects both shim dependencies and any remaining unbound
+HGGC entry. `check_native_link.py` reproduces the original failure locally and
+checks the fixed extension with the same legacy shim preloaded. A direct-only
+relink without hidden bindings is the second negative; it still reproduces the
+missing-12.0 error. All 28 device kernels / 43,024 instructions compare unchanged
+against the previous Torch 2.9 prebuilt. No new device performance is claimed.
+
+The SDK build now emits `manifest.json` beside the extension. To package that
+fresh output rather than a historical source-tree prebuilt, set
+`SAGEATTENTION_PPU_PREBUILT_DIR=<build-lib/sageattention>` when running
+`setup_ppu_wheel.py`. Packaging rejects a prebuilt without the native-link
+contract. The box receives an already-built wheel, not a rebuild command.
+
 The verified wheel is published on the independent
 [`ppu-wheels` artifact branch](https://github.com/DrXuQian/SageAttention/tree/ppu-wheels)
 at `26e6c0e`. It is an ordinary Git blob (no LFS required); `main` contains no new
@@ -122,7 +145,7 @@ actlize gitlink, payload SHA256 and target ABI before copying that library into
 the wheel; it does **not** compile a replacement kernel. The packager's own Torch
 installation does not select the target ABI.
 
-The wheel is `sageattention==2.2.0+ppu.torch29` for Python 3.12, Torch 2.9.0,
+The runtime-fixed wheel is `sageattention==2.2.0.post1+ppu.torch29` for Python 3.12, Torch 2.9.0,
 C++11 ABI=1, PPU0010. Set `LD_LIBRARY_PATH` to the PPU SDK `lib` directory and
 install with `python -m pip install --no-deps --force-reinstall <wheel>`.
 Test imports outside the source checkout to avoid loading an old in-place `.so`.
