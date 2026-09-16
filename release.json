@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "package": "sageattention",
+  "version": "2.2.0+ppu.torch29",
+  "wheel": "sageattention-2.2.0+ppu.torch29-cp312-cp312-linux_x86_64.whl",
+  "wheel_sha256": "d3436d0d268d9f5975defae90acecff381e9338db54d0b6db74acc0b11510ef2",
+  "package_source_sha": "4ca7d9f6508c8e885ec898fc2f782b933391387a",
+  "native_sha256": "6613a6d26001de7235b62e757a5216da7d400c13fdcf7ab9ab6dd139ebd142bd",
+  "native_build_source_sha": "893d2e22b59d1e2b8c9f03e84fa52a7f75693ae0",
+  "actlize_sha": "9d063e4c5fde5119d4d68bfbe124aacd8ed2ec88",
+  "target": "PPU0010, Python 3.12, Torch 2.9.0, C++11 ABI=1",
+  "storage": "ordinary Git on dedicated artifact branch; no LFS",
+  "scope": "Verified prebuilt repack; native payload unchanged; no new device run",
+  "local_checks": [
+    "prebuilt source/actlize/target/hash verification",
+    "wheel has exactly one native payload, matching size and SHA256",
+    "pip --target installation",
+    "wrong Torch version, wrong C++ ABI, changed payload rejected"
+  ]
+}
