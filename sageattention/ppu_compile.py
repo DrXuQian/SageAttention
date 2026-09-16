@@ -2,6 +2,9 @@
 
 import torch
 
+from ._ppu_wheel import verify_installed_wheel
+
+verify_installed_wheel(torch)
 from . import _qattn_ppu
 
 

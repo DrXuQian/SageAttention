@@ -106,6 +106,28 @@ device measurement rather than being inferred from the resource improvement.
 
 ## Commands
 
+### Verified Torch 2.9 wheel
+
+The `ppu-wheels` artifact branch stores the installable wheel through Git LFS;
+source changes stay on `main`. `setup_ppu_wheel.py` repackages the exact dense-only
+`cpython312-torch2.9-cxx11abi1` prebuilt. It verifies the original source hashes,
+actlize gitlink, payload SHA256 and target ABI before copying that library into
+the wheel; it does **not** compile a replacement kernel. The packager's own Torch
+installation does not select the target ABI.
+
+The wheel is `sageattention==2.2.0+ppu.torch29` for Python 3.12, Torch 2.9.0,
+C++11 ABI=1, PPU0010. Set `LD_LIBRARY_PATH` to the PPU SDK `lib` directory and
+install with `python -m pip install --no-deps --force-reinstall <wheel>`.
+Test imports outside the source checkout to avoid loading an old in-place `.so`.
+At import, `_ppu_wheel_manifest.json` validates Python/Torch/C++ ABI and the
+installed native payload hash before loading the extension. ABI or payload
+mismatches are errors, not silent fallbacks to a different backend.
+
+Local packaging and three planted ABI/hash failures are tested by
+`python dev/ppu_int8/check_wheel_contract.py`. These are CPU checks, not a new
+device correctness/performance measurement. The native manifest retains the
+original kernel build identity separately from the wheel's packaging commit.
+
 Local, no PPU execution:
 
 ```bash
