@@ -6,6 +6,10 @@
 #include "attn_ppu.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
+  module.def("qk_int8_sv_int8_permuted_k_attn", &qk_int8_sv_int8_permuted_k_attn_ppu,
+             "Experimental INT8 PV: K must be prepared by quant_per_block_int8_permuted_k");
+  module.def("quant_per_block_int8_permuted_k", &quant_per_block_int8_permuted_k_ppu,
+             "Experimental K row permutation on full K64 blocks; partial block stays raw");
   module.def("qk_int8_sv_int8_accum_f32_attn", &qk_int8_sv_int8_accum_f32_attn_ppu,
              "PPU S8 QK / U8xS8 PV, per-block FP32 dequantized accumulation");
   module.def("quant_value_int8", &quant_value_int8_ppu,

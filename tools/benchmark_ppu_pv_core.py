@@ -17,6 +17,8 @@ import statistics
 from benchmark_ppu_sage_bf16 import file_identity
 
 ROLES = ("fp16-pv", "int8-pv")
+PERMUTED_ROLES = ROLES + ("int8-pv-permuted-k", "K-quant-raw", "K-quant-permuted",
+                         "K-prepare+int8-pv", "K-prepare+int8-pv-permuted-k")
 
 
 def arguments(argv=None):
@@ -28,6 +30,7 @@ def arguments(argv=None):
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0x5A6E)
     parser.add_argument("--causal", action="store_true")
+    parser.add_argument("--permuted-k", action="store_true", help="Add explicit K-layout candidate and its moved preparation cost")
     parser.add_argument("--out", type=Path, default=Path("/workspace/sage-pv-core.json"))
     parser.add_argument("--describe", action="store_true")
     args = parser.parse_args(argv)
@@ -39,8 +42,9 @@ def arguments(argv=None):
     return args
 
 
-def roles_for_sample(index):
-    return ROLES if index % 2 == 0 else ROLES[::-1]
+def roles_for_sample(index, roles=ROLES):
+    shift = index % len(roles)
+    return roles[shift:] + roles[:shift]
 
 
 def summary(samples):
@@ -59,6 +63,10 @@ def verdict(fp16, int8):
 
 
 def launch_core(pv, extension, tensors, causal, scale):
+    if pv == "int8-pv-permuted-k":
+        return extension.qk_int8_sv_int8_permuted_k_attn(
+            tensors["qi"], tensors["kp"], tensors["vi"], tensors[pv],
+            tensors["qs"], tensors["kps"], tensors["vs"], 0, int(causal), 2, scale, 0)
     if pv == "int8-pv":
         return extension.qk_int8_sv_int8_accum_f32_attn(
             tensors["qi"], tensors["ki"], tensors["vi"], tensors["int8-pv"],
@@ -72,11 +80,12 @@ def launch_core(pv, extension, tensors, causal, scale):
 
 def main(argv=None):
     args = arguments(argv)
+    roles = PERMUTED_ROLES if args.permuted_k else ROLES
     plan = dict(B=args.batch, H=args.heads, S=args.seq, D=args.head_dim,
                 causal=args.causal, input_dtype="bf16", output_dtype="bf16", layout="NHD",
-                roles=ROLES, QK="shared-identical-quantized-buffers", smooth_k=False,
+                roles=roles, QK="same codes/scales; explicit K row permutation" if args.permuted_k else "shared-identical-quantized-buffers", smooth_k=False,
                 timing="normal-device-events/launch-span/alternating-arms",
-                preparation="once; outside events", warmup=args.warmup,
+                preparation="once outside core; K-only and K-prepare+core also measured" if args.permuted_k else "once; outside events", warmup=args.warmup,
                 samples=args.samples, launches_per_sample=args.launches, seed=args.seed,
                 acu=False, compile=False, scope="core-only; unequal P/V quantization",
                 verdict="strictly disjoint sample envelopes, otherwise UNRESOLVED")
@@ -100,14 +109,15 @@ def main(argv=None):
     shape = (args.batch, args.seq, args.heads, args.head_dim)
     rows = sorted({0, min(31, args.seq - 1), min(127, args.seq - 1), args.seq // 2, args.seq - 1})
     scale = args.head_dim ** -.5
-    timings = {role: [] for role in ROLES}
+    timings = {role: [] for role in roles}
     execution_order = []
 
     # The native extension launches on the default stream; record events there.
     with torch.inference_mode(), torch.cuda.stream(torch.cuda.default_stream(args.device)):
         q, k, v = [torch.randn(shape, device="cuda", dtype=torch.bfloat16) for _ in range(3)]
         t = {key: torch.empty(shape, device="cuda", dtype=torch.int8) for key in ("qi", "ki")}
-        t.update({role: torch.empty(shape, device="cuda", dtype=torch.bfloat16) for role in ROLES})
+        core_roles = ROLES + (("int8-pv-permuted-k",) if args.permuted_k else ())
+        t.update({role: torch.empty(shape, device="cuda", dtype=torch.bfloat16) for role in core_roles})
         t["qs"] = torch.empty((args.batch, args.heads, ((args.seq + 127) // 128) * 4),
                               device="cuda", dtype=torch.float32)
         t["ks"] = torch.empty((args.batch, args.heads, (args.seq + 63) // 64),
@@ -120,31 +130,60 @@ def main(argv=None):
         sage.quant_per_warp_int8(q, t["qi"], t["qs"], 128, 32, 0)
         sage.quant_per_block_int8(k, no_mean, t["ki"], t["ks"], 64, 0)
         sage.quant_value_int8(v, t["vi"], t["vs"], 0)
+        functions = {role: (lambda r=role: launch_core(r, sage, t, args.causal, scale))
+                     for role in core_roles}
+        if args.permuted_k:
+            if not hasattr(sage, "qk_int8_sv_int8_permuted_k_attn"):
+                raise RuntimeError("candidate lacks explicit permuted-K entrypoint; no fallback")
+            t["kp"] = torch.empty_like(t["ki"])
+            t["kps"] = torch.empty_like(t["ks"])
+            def quant_raw():
+                sage.quant_per_block_int8(k, no_mean, t["ki"], t["ks"], 64, 0)
+            def quant_permuted():
+                sage.quant_per_block_int8_permuted_k(k, no_mean, t["kp"], t["kps"], 64, 0)
+            def prepare_raw_core():
+                quant_raw()
+                functions["int8-pv"]()
+            def prepare_permuted_core():
+                quant_permuted()
+                functions["int8-pv-permuted-k"]()
+            quant_permuted()
+            functions.update({"K-quant-raw": quant_raw, "K-quant-permuted": quant_permuted,
+                              "K-prepare+int8-pv": prepare_raw_core,
+                              "K-prepare+int8-pv-permuted-k": prepare_permuted_core})
+            # Reuse each arm's O, not extra copies or an omitted output check.
+            t["K-quant-raw"], t["K-quant-permuted"] = t["ki"], t["kp"]
+            t["K-prepare+int8-pv"] = t["int8-pv"]
+            t["K-prepare+int8-pv-permuted-k"] = t["int8-pv-permuted-k"]
         torch.cuda.synchronize()
 
         def sample(role):
             return t[role][:, rows].cpu().contiguous()
 
         anchors = {}
-        for role in ROLES:
-            t[role].fill_(float("nan"))
-            launch_core(role, sage, t, args.causal, scale)
+        for role in roles:
+            if not role.startswith("K-quant-"):
+                t[role].fill_(float("nan"))
+            functions[role]()
             torch.cuda.synchronize()
             if not torch.isfinite(t[role]).all().item():
                 raise RuntimeError(f"{role}: nonfinite or unwritten preflight output")
             anchors[role] = sample(role)
+        if args.permuted_k:
+            torch.testing.assert_close(anchors["int8-pv-permuted-k"].float(),
+                                       anchors["int8-pv"].float(), atol=.002, rtol=.01)
         for iteration in range(args.warmup):
-            for role in roles_for_sample(iteration):
-                launch_core(role, sage, t, args.causal, scale)
+            for role in roles_for_sample(iteration, roles):
+                functions[role]()
         torch.cuda.synchronize()
         for iteration in range(args.samples):
-            order = roles_for_sample(iteration)
+            order = roles_for_sample(iteration, roles)
             execution_order.append(order)
             for role in order:
                 begin, end = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
                 begin.record()
                 for _ in range(args.launches):
-                    launch_core(role, sage, t, args.causal, scale)
+                    functions[role]()
                 end.record()
                 end.synchronize()
                 timings[role].append(begin.elapsed_time(end) * 1000 / args.launches)
@@ -164,10 +203,21 @@ def main(argv=None):
                   output_sha256_sampled=fingerprints, replay="sampled-RAW-BIT/STABLE",
                   between_arm_max_abs_diagnostic=delta.abs().max().item(),
                   numerical_authority="separate device_all_int8 gate; this timing is not an independent numeric oracle")
-    for role in ROLES:
+    for role in roles:
         print("[PV core result] " + json.dumps(dict(role=role, **results[role])), flush=True)
     print(f"[PV core verdict] {decision} speedup_int8_vs_fp16={speedup:.6f}x "
           "scope=PREQUANTIZED-CORE event_timing=NOT-ACU", flush=True)
+    if args.permuted_k:
+        comparisons = {}
+        for label, old, new in (
+                ("permuted-core-vs-raw", "int8-pv", "int8-pv-permuted-k"),
+                ("permuted-core-vs-fp16", "fp16-pv", "int8-pv-permuted-k"),
+                ("K-prepare+core-vs-raw", "K-prepare+int8-pv", "K-prepare+int8-pv-permuted-k")):
+            speed = results[old]["median_us"] / results[new]["median_us"]
+            v = verdict(results[old], results[new]).replace("INT8-FASTER", "CANDIDATE-FASTER").replace("FP16-FASTER", "CONTROL-FASTER")
+            comparisons[label] = dict(verdict=v, speedup=speed, control=old, candidate=new)
+            print(f"[K permutation verdict] {label} {v} speedup={speed:.6f}x", flush=True)
+        report["key_permutation_comparisons"] = comparisons
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2) + "\n")
     return 0

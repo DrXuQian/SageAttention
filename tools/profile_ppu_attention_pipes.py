@@ -24,6 +24,7 @@ def arguments(argv=None):
     parser.add_argument("--arm", choices=("sage", "flash", "both"), default="sage")
     parser.add_argument("--pv", choices=("int8", "fp16"), default="int8",
                         help="Sage PV type; fp16 retains the previous measured arm")
+    parser.add_argument("--key-layout", choices=("raw", "permuted"), default="raw")
     parser.add_argument("--seed", type=int, default=0x5A6E)
     parser.add_argument("--describe", action="store_true", help="Print plan without importing Torch")
     args = parser.parse_args(argv)
@@ -31,6 +32,8 @@ def arguments(argv=None):
         parser.error("shape dimensions and --iters must be positive")
     if args.head_dim not in (64, 128) or args.device < 0:
         parser.error("head-dim must be 64/128 and device must be nonnegative")
+    if args.key_layout == "permuted" and (args.pv != "int8" or args.arm != "sage"):
+        parser.error("permuted K is an explicit Sage INT8-PV experiment only")
     return args
 
 
@@ -54,6 +57,7 @@ def main(argv=None):
                 sage_expected_grid=[(args.seq + 127) // 128, args.heads, args.batch],
                 sage_expected_threads=128, sage_kernel="qk_int8_pv_kernel", sage_pv=args.pv,
                 scope="profile only; not a new numerical correctness verdict")
+    plan["key_layout"] = args.key_layout
     print("[profile-target plan] " + json.dumps(plan), flush=True)
     if args.describe:
         return 0
@@ -95,7 +99,9 @@ def main(argv=None):
             # One preparation, not one per attention invocation. ACU may report
             # these separately; they are not part of the Sage core kernel.
             sage.quant_per_warp_int8(q, qi, qs, 128, 32, 0)
-            sage.quant_per_block_int8(k, no_mean, ki, ks, 64, 0)
+            quant_k = (sage.quant_per_block_int8_permuted_k if args.key_layout == "permuted"
+                       else sage.quant_per_block_int8)
+            quant_k(k, no_mean, ki, ks, 64, 0)
             if args.pv == "int8":
                 sage.quant_value_int8(v, vh, vs, 0)
             else:
@@ -108,8 +114,9 @@ def main(argv=None):
                                       args.causal, -1, -1, 0.0, False, None)
                 else:
                     if args.pv == "int8":
-                        sage.qk_int8_sv_int8_accum_f32_attn(qi, ki, vh, output[arm], qs, ks, vs,
-                                                         0, int(args.causal), 2, scale, 0)
+                        int8_fn = (sage.qk_int8_sv_int8_permuted_k_attn if args.key_layout == "permuted"
+                                   else sage.qk_int8_sv_int8_accum_f32_attn)
+                        int8_fn(qi, ki, vh, output[arm], qs, ks, vs, 0, int(args.causal), 2, scale, 0)
                     else:
                         sage.qk_int8_sv_f16_accum_f32_attn(qi, ki, vh, output[arm], qs, ks,
                                                         0, int(args.causal), 2, scale, 0)

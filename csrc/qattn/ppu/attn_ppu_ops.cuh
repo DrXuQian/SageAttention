@@ -22,6 +22,7 @@
 #include "attn_ppu_probability.cuh"
 #include "attn_ppu_value_scale.cuh"
 #include "attn_ppu_denominator.cuh"
+#include "attn_ppu_key_layout.cuh"
 
 namespace sageattention::ppu {
 
@@ -121,6 +122,27 @@ __device__ __forceinline__ void probability_to_u8_operand(
     dst[word] = __byte_perm(paired,
         __shfl_xor_sync(0xffffffffu, paired, 2), quad_selector);
   }
+}
+
+// When K's complete K64 blocks were prepared by key_storage_row(), QK's C
+// columns already have PV's logical K order. Only register names interleave.
+// Incomplete blocks retain ordinary K and MUST use the butterfly above.
+__device__ __forceinline__ void probability_to_direct_u8_operand(
+    uint32_t (&dst)[4], uint32_t const (&left)[2], uint32_t const (&right)[2]) {
+  dst[0] = left[0];
+  dst[1] = right[0];
+  dst[2] = left[1];
+  dst[3] = right[1];
+}
+
+// Tail-only word bridge. Calling this as each probability row completes avoids
+// keeping raw and transposed full P fragments live across a late merge.
+__device__ __forceinline__ uint32_t probability_transpose_u8_word(uint32_t source) {
+  int const lane = int(threadIdx.x) & 31;
+  unsigned const pair = layout::probability_pair_selector(lane);
+  unsigned const quad = layout::probability_quad_selector(lane);
+  source = __byte_perm(source, __shfl_xor_sync(0xffffffffu, source, 1), pair);
+  return __byte_perm(source, __shfl_xor_sync(0xffffffffu, source, 2), quad);
 }
 
 // CLayout and ALayout are different physical views on PPU0010.  Put the score

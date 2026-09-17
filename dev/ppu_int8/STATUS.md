@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 09:34:17 UTC
-- working-on: score/scale screens complete and paired INT8-PV/FP16-PV event driver ready; publishing local evidence only, binaries unchanged
+- updated-at: 2026-09-17 10:09:16 UTC
+- working-on: K-permutation r3 passes local gates (H3 regs244,zero stack,old48 native streams unchanged); committing source then clean SDK build and isolated artifact
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
-- blocked-on: fresh PPU candidate numeric/latency/ACU execution; no PPU speedup or NVIDIA parity claimed
-- last-commit: 472a3f4 (local numerical/codegen screens + paired event driver; this status-only follow-up excluded)
+- blocked-on: fresh PPU numeric/latency/ACU execution after local artifact handoff; no PPU speedup or NVIDIA parity claimed
+- last-commit: 4486f03 (previous completed checkpoint; current candidate source uncommitted)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
@@ -25,3 +25,6 @@
 - score screen: unconditional FMA gives 0.98301193 for exact constant-V answer 1, outside existing O tolerance; rejected. Biased integer seed recovers 4194305/4194305 scores; real SDK microprobe 298->273 static instructions at unchanged regs62/80 and stack0, but scaled rounding differs and full attention remains unadmitted.
 - V-scale screen: sequence-global INT8 scale passes 16 random cases, fails both causal and full-attention unattended-outlier witnesses with relative error1 (old local scale gives1, global gives0 or3.63e-16); unconditional port rejected. No production format/quantizer change.
 - timing control: benchmark_ppu_pv_core.py alternates same-input INT8-PV and retained FP16-PV, normal events with preparation excluded. Six local tests PASS; integrated in opt-in candidate runner; device result NOT RUN.
+- K-permutation proof: actual QK CLayout/PV ALayout,4096-bit basis/524288 words,18528 row placements and2377760 causal comparisons pass; five omission/bit/tail/mask/coverage negatives all red. Independent reshape/transpose reference covers768 cases and42688512 cells. K full64 blocks only; V/codes/scales unchanged; denominator reassociation stays under existing numeric gates.
+- K-permutation SDK r2:72/72 types,zero private stack; H3 complete-block shuffle40->8 (tail40 retained),regs248/104 versus raw246/128. REJECT_RESOURCE under predeclared246 vector-register cap; no device evidence,no new binary published. Old48 native streams unchanged in r1; r2 full replay still to be checked.
+- K-permutation SDK r3:72/72 types,old48 native opcode+operand streams unchanged,H3 regs244/104 and stack0. Full/tail/final shuffles8/40/8. Six codegen negatives red; five layout negatives red; tensor reference768 cases and paired-timing8/profile7 tests pass. Prepared explicit runner measures raw INT8/FP16/new INT8 plus K quant and K-prepare+core,with numeric gate before events and separate ACU. Device NOT_RUN.

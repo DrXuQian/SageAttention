@@ -6,7 +6,7 @@ runner_repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo="$(cd "${CANDIDATE_SOURCE_REPO:-$runner_repo}" && pwd)"
 candidate="${CANDIDATE:-alu-candidate}"
 case "$candidate" in
-  alu-candidate|deferred-denominator) ;;
+  alu-candidate|deferred-denominator|permuted-key) ;;
   *) echo "[PPU ALU candidate] FAIL: unknown candidate $candidate" >&2; exit 1 ;;
 esac
 sha="$(git -C "$repo" rev-parse HEAD)"
@@ -35,21 +35,29 @@ if actual.parent != expected:
     raise RuntimeError(f"staged candidate was shadowed: {actual}; expected {expected}")
 print(f"[PPU ALU candidate] loaded={actual}")
 PY
-python "$runner_repo/dev/ppu_int8/device_all_int8.py" 2>&1 | tee "$out/correctness.log"
+numeric_args=()
+bench_args=()
+profile_args=()
+if [[ "$candidate" == permuted-key ]]; then
+  numeric_args+=(--key-layout permuted)
+  bench_args+=(--permuted-k)
+  profile_args+=(--key-layout permuted)
+fi
+python "$runner_repo/dev/ppu_int8/device_all_int8.py" "${numeric_args[@]}" 2>&1 | tee "$out/correctness.log"
 if [[ "${BENCHMARK:-1}" == 1 ]]; then
   # Normal events in a separate, unprofiled process. Both PV arms use identical
   # prequantized Q/K and the same original V; no preparation inside the timer.
   python "$runner_repo/tools/benchmark_ppu_pv_core.py" \
     --batch 1 --heads 56 --seq 73774 --head-dim 128 --device "${DEVICE:-0}" \
     --warmup "${WARMUP:-2}" --samples "${SAMPLES:-7}" --launches "${LAUNCHES:-1}" \
-    --out "$out/pv-core-events.json" 2>&1 | tee "$out/pv-core-events.log"
+    --out "$out/pv-core-events.json" "${bench_args[@]}" 2>&1 | tee "$out/pv-core-events.log"
 fi
 if [[ "${PROFILE:-0}" == 1 ]]; then
   "${ACU:-/sim/eec/shared/junfu.qx/asight/bin/acu}" -f \
     -o "$out/sage-h3-int8-$candidate" --set full \
     python "$runner_repo/tools/profile_ppu_attention_pipes.py" \
       --arm sage --pv int8 --batch 1 --heads 56 --seq 73774 --head-dim 128 \
-      --device "${DEVICE:-0}" --iters "${ITERS:-1}" \
+      --device "${DEVICE:-0}" --iters "${ITERS:-1}" "${profile_args[@]}" \
       2>&1 | tee "$out/acu.log"
 fi
 printf '[PPU ALU candidate] PASS: artifacts=%s installed_default=UNCHANGED\n' "$out"

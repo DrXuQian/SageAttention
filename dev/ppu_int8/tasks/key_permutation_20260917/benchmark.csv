@@ -1,0 +1,2 @@
+candidate,device,shape,scope,latency_ms,verdict
+K-permutation-direct-P,PPU,B1H56N73774D128,prequantized-core,,NOT_RUN

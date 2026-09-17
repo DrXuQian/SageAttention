@@ -27,7 +27,8 @@ constexpr float kLog2E = 1.4426950408889634f;
 
 namespace detail {
 
-template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV>
+template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV,
+          bool KeyRowsPermuted = false>
 __launch_bounds__(128, 1)
 __global__ void qk_int8_pv_kernel(
     int8_t const *__restrict__ query,
@@ -47,6 +48,7 @@ __global__ void qk_int8_pv_kernel(
   static_assert(HeadDim == 64 || HeadDim == 128,
                 "PPU SageAttention supports head dimensions 64 and 128");
   static_assert(kBlockQ % kWarpQ == 0);
+  static_assert(!KeyRowsPermuted || Int8PV, "permuted K is specific to the U8 PV layout");
   constexpr int kQBlocksPerWarp = kWarpQ / 16;
   constexpr int kKVBlocks = kBlockKV / 16;
   constexpr int kQKSteps = HeadDim / 32;
@@ -252,8 +254,12 @@ __global__ void qk_int8_pv_kernel(
           for (int column_slot = 0; column_slot < 4; ++column_slot) {
             int const e = row_slot * 4 + column_slot;
             int32_t const quantized = score.integer[qb][kb][e];
-            int const kv_col = kv * kBlockKV + kb * 16
+            int kv_col = kv * kBlockKV + kb * 16
                 + layout::accumulator_column(lane, e);
+            if constexpr (KeyRowsPermuted && Causal) {
+              // Masks are semantic token order, never permuted storage order.
+              if (!edge) kv_col = layout::permute_key_row(kv_col);
+            }
             float value_f = float(quantized) * score_scale;
             if ((edge && kv_col >= kv_len) ||
                 (causal_edge && kv_col > q_position)) {
@@ -312,6 +318,14 @@ __global__ void qk_int8_pv_kernel(
             tile_sum += s[base] + s[base + 1] + s[base + 2] + s[base + 3];
           }
         }
+        if constexpr (KeyRowsPermuted) {
+          if (edge) {
+#pragma unroll
+            for (int kb = 0; kb < kKVBlocks; ++kb)
+              p_codes[qb][kb][row_slot] = probability_transpose_u8_word(
+                  p_codes[qb][kb][row_slot]);
+          }
+        }
         if constexpr (!Int8PV) {
           // Keep the admitted FP16-PV arithmetic/order exactly as before.
           tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 1);
@@ -330,8 +344,13 @@ __global__ void qk_int8_pv_kernel(
       for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
 #pragma unroll
         for (int step = 0; step < 2; ++step) {
-          probability_to_u8_operand(probability[qb][step],
-                                    p_codes[qb][2 * step], p_codes[qb][2 * step + 1]);
+          if constexpr (KeyRowsPermuted) {
+            probability_to_direct_u8_operand(probability[qb][step],
+                p_codes[qb][2 * step], p_codes[qb][2 * step + 1]);
+          } else {
+            probability_to_u8_operand(probability[qb][step],
+                                      p_codes[qb][2 * step], p_codes[qb][2 * step + 1]);
+          }
         }
       }
 #pragma unroll
@@ -446,7 +465,8 @@ __global__ void qk_int8_pv_kernel(
   }
 }
 
-template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV>
+template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV,
+          bool KeyRowsPermuted = false>
 void launch_ppu_attention(
     torch::Tensor const &query, torch::Tensor const &key,
     torch::Tensor const &value, torch::Tensor const &output,
@@ -463,7 +483,7 @@ void launch_ppu_attention(
       + kBlockKV * HeadDim * sizeof(int8_t)
       + kBlockKV * HeadDim * (Int8PV ? sizeof(int8_t) : sizeof(cutlass::half_t))
       + (use_shared_value_scale<HeadDim, Causal, Int8PV> ? ValueScaleStage<HeadDim>::Bytes : 0);
-  auto kernel = &qk_int8_pv_kernel<HeadDim, Causal, ReturnLse, Output, Int8PV>;
+  auto kernel = &qk_int8_pv_kernel<HeadDim, Causal, ReturnLse, Output, Int8PV, KeyRowsPermuted>;
   // The opt-in is a per-function property.  Reissuing it for every attention
   // op adds host/runtime work but cannot change the already-loaded kernel.
   static hggcError_t const attribute_status = hggcFuncSetAttribute(
@@ -492,7 +512,7 @@ void launch_ppu_attention(
               "PPU SageAttention launch failed: ", hggcGetErrorString(error));
 }
 
-template <int HeadDim, typename Output, bool Int8PV>
+template <int HeadDim, typename Output, bool Int8PV, bool KeyRowsPermuted = false>
 void dispatch_flags(
     bool causal, bool return_lse,
     torch::Tensor const &query, torch::Tensor const &key,
@@ -506,7 +526,7 @@ void dispatch_flags(
     int stride_bz_o, int stride_seq_o, int stride_h_o,
     float softmax_scale) {
 #define SAGEATTN_PPU_LAUNCH(CAUSAL, LSE)                                      \
-  launch_ppu_attention<HeadDim, CAUSAL, LSE, Output, Int8PV>(                 \
+  launch_ppu_attention<HeadDim, CAUSAL, LSE, Output, Int8PV, KeyRowsPermuted>( \
       query, key, value, output, lse, query_scale, key_scale, value_scale,    \
       qo_len, kv_len, num_qo_heads, num_kv_heads,                            \
       stride_bz_q, stride_seq_q, stride_h_q,                                 \
@@ -526,7 +546,7 @@ void dispatch_flags(
 }  // namespace detail
 }  // namespace sageattention::ppu
 
-template <bool Int8PV>
+template <bool Int8PV, bool KeyRowsPermuted = false>
 torch::Tensor attention_forward(
     torch::Tensor query, torch::Tensor key, torch::Tensor value,
     torch::Tensor output, torch::Tensor query_scale,
@@ -659,7 +679,7 @@ torch::Tensor attention_forward(
       : torch::empty({0}, query.options().dtype(torch::kFloat32));
 
 #define SAGEATTN_PPU_DISPATCH(HEAD_DIM, OUTPUT_TYPE)                           \
-  sageattention::ppu::detail::dispatch_flags<HEAD_DIM, OUTPUT_TYPE, Int8PV>(  \
+  sageattention::ppu::detail::dispatch_flags<HEAD_DIM, OUTPUT_TYPE, Int8PV, KeyRowsPermuted>( \
       is_causal != 0, return_lse != 0,                                       \
       query, key, value, output, lse, query_scale, key_scale, value_scale,    \
       qo_len, kv_len, num_qo_heads, num_kv_heads,                            \
@@ -692,4 +712,14 @@ torch::Tensor qk_int8_sv_int8_accum_f32_attn_ppu(
     int gran, float scale, int lse) {
   return attention_forward<true>(q, k, v, o, qs, ks, vs,
                                  layout, causal, gran, scale, lse);
+}
+
+// Explicit paired ABI: callers must use quant_per_block_int8_permuted_k_ppu.
+// The old raw-K entrypoint above and the FP16-PV entrypoint are unchanged.
+torch::Tensor qk_int8_sv_int8_permuted_k_attn_ppu(
+    torch::Tensor q, torch::Tensor k, torch::Tensor v, torch::Tensor o,
+    torch::Tensor qs, torch::Tensor ks, torch::Tensor vs, int layout, int causal,
+    int gran, float scale, int lse) {
+  return attention_forward<true, true>(q, k, v, o, qs, ks, vs,
+                                       layout, causal, gran, scale, lse);
 }

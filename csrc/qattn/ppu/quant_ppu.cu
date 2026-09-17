@@ -8,6 +8,7 @@
 
 #include <cutlass/numeric_types.h>
 #include "attn_ppu_int8_layout.cuh"
+#include "attn_ppu_key_layout.cuh"
 
 namespace sageattention::ppu {
 namespace detail {
@@ -75,7 +76,7 @@ __device__ __forceinline__ float block_max(float value) {
   return warp_max(value);
 }
 
-template <typename Input, int HeadDim, int Rows, bool SubtractMean>
+template <typename Input, int HeadDim, int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
 __global__ void quantize_int8_kernel(
     Input const *__restrict__ input,
     Input const *__restrict__ mean,
@@ -90,6 +91,7 @@ __global__ void quantize_int8_kernel(
   int const batch = int(blockIdx.z);
   int const row0 = logical_block * Rows;
   int const elements = Rows * HeadDim;
+  static_assert(!KeyRowsPermuted || Rows == 64, "only K64 key blocks may be permuted");
 
   float local_max = 1.0e-7f;
   for (int linear = int(threadIdx.x); linear < elements;
@@ -134,15 +136,16 @@ __global__ void quantize_int8_kernel(
       }
       int const quantized = max(-127, min(127,
           __float2int_rn(value * multiplier)));
+      int const output_row = KeyRowsPermuted ? layout::key_storage_row(row, tokens) : row;
       output[int64_t(batch) * stride_bz_output
-             + int64_t(row) * stride_seq_output
+             + int64_t(output_row) * stride_seq_output
              + int64_t(head) * stride_h_output + column] =
           static_cast<int8_t>(quantized);
     }
   }
 }
 
-template <typename Input, int HeadDim, int Rows, bool SubtractMean>
+template <typename Input, int HeadDim, int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
 void launch_quant(
     torch::Tensor const &input, torch::Tensor const &mean,
     torch::Tensor const &output, torch::Tensor const &scale,
@@ -152,7 +155,7 @@ void launch_quant(
     int stride_bz_mean, int stride_h_mean) {
   dim3 const grid(logical_blocks, heads, input.size(0));
   int constexpr threads = 128;
-  quantize_int8_kernel<Input, HeadDim, Rows, SubtractMean>
+  quantize_int8_kernel<Input, HeadDim, Rows, SubtractMean, KeyRowsPermuted>
       <<<grid, threads>>>(
           reinterpret_cast<Input const *>(input.data_ptr()),
           SubtractMean ? reinterpret_cast<Input const *>(mean.data_ptr()) : nullptr,
@@ -203,7 +206,7 @@ void validate_quant_tensors(
   }
 }
 
-template <int Rows, bool SubtractMean>
+template <int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
 void dispatch_quant(
     torch::Tensor const &input, torch::Tensor const &mean,
     torch::Tensor const &output, torch::Tensor const &scale,
@@ -220,7 +223,7 @@ void dispatch_quant(
 
 #define SAGEATTN_PPU_QUANT(INPUT_TYPE, HEAD_DIM)                              \
   sageattention::ppu::detail::launch_quant<                                  \
-      INPUT_TYPE, HEAD_DIM, Rows, SubtractMean>(                             \
+      INPUT_TYPE, HEAD_DIM, Rows, SubtractMean, KeyRowsPermuted>(            \
       input, mean, output, scale, tokens, heads, logical_blocks,             \
       stride_seq_input, stride_h_input, stride_seq_output, stride_h_output,  \
       stride_bz_mean, stride_h_mean)
@@ -258,7 +261,8 @@ void quant_per_warp_int8_ppu(
                             tensor_layout, blocks);
 }
 
-void quant_per_block_int8_ppu(
+template <bool KeyRowsPermuted>
+void quant_per_block_int8_impl(
     torch::Tensor input, torch::Tensor mean, torch::Tensor output,
     torch::Tensor scale, int block_size, int tensor_layout) {
   bool const subtract_mean = mean.defined() && mean.numel() != 0;
@@ -281,12 +285,22 @@ void quant_per_block_int8_ppu(
     TORCH_CHECK(mean.size(0) == input.size(0) && mean.size(1) == heads &&
                     mean.size(2) == head_dim,
                 "PPU K mean shape mismatch");
-    dispatch_quant<64, true>(input, mean, output, scale,
+    dispatch_quant<64, true, KeyRowsPermuted>(input, mean, output, scale,
                              tensor_layout, blocks);
   } else {
-    dispatch_quant<64, false>(input, torch::Tensor{}, output, scale,
+    dispatch_quant<64, false, KeyRowsPermuted>(input, torch::Tensor{}, output, scale,
                               tensor_layout, blocks);
   }
+}
+
+void quant_per_block_int8_ppu(torch::Tensor input, torch::Tensor mean,
+    torch::Tensor output, torch::Tensor scale, int block_size, int tensor_layout) {
+  quant_per_block_int8_impl<false>(input, mean, output, scale, block_size, tensor_layout);
+}
+
+void quant_per_block_int8_permuted_k_ppu(torch::Tensor input, torch::Tensor mean,
+    torch::Tensor output, torch::Tensor scale, int block_size, int tensor_layout) {
+  quant_per_block_int8_impl<true>(input, mean, output, scale, block_size, tensor_layout);
 }
 
 void quant_value_int8_ppu(torch::Tensor input, torch::Tensor output,

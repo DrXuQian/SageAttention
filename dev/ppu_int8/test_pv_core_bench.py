@@ -49,6 +49,24 @@ class CoreBench(unittest.TestCase):
     def test_plan_requires_no_torch_device(self):
         self.assertEqual(bench.main(["--describe"]), 0)
 
+    def test_permuted_entrypoint_is_explicit(self):
+        native = Mock()
+        names = ("qi", "kp", "vi", "int8-pv-permuted-k", "qs", "kps", "vs")
+        t = {name: object() for name in names}
+        bench.launch_core("int8-pv-permuted-k", native, t, False, .125)
+        call, = native.mock_calls
+        self.assertEqual(call[0], "qk_int8_sv_int8_permuted_k_attn")
+        self.assertIs(call.args[1], t["kp"])
+        self.assertIs(call.args[5], t["kps"])
+
+    def test_moved_prepare_cost_is_not_hidden(self):
+        self.assertIn("K-quant-raw", bench.PERMUTED_ROLES)
+        self.assertIn("K-quant-permuted", bench.PERMUTED_ROLES)
+        self.assertIn("K-prepare+int8-pv", bench.PERMUTED_ROLES)
+        self.assertIn("K-prepare+int8-pv-permuted-k", bench.PERMUTED_ROLES)
+        for i in range(len(bench.PERMUTED_ROLES)):
+            self.assertEqual(set(bench.roles_for_sample(i, bench.PERMUTED_ROLES)), set(bench.PERMUTED_ROLES))
+
 
 if __name__ == "__main__":
     unittest.main()

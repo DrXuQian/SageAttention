@@ -45,6 +45,13 @@ class ProfileContract(unittest.TestCase):
     def test_both_selects_each_arm_once(self):
         self.assertEqual(target.selected_arms("both"), ("flash", "sage"))
 
+    def test_key_layout_is_explicit_and_int8_only(self):
+        self.assertEqual(target.arguments([]).key_layout, "raw")
+        self.assertEqual(target.arguments(["--key-layout", "permuted"]).key_layout, "permuted")
+        for argv in (["--pv", "fp16"], ["--arm", "flash"], ["--arm", "both"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                target.arguments(argv + ["--key-layout", "permuted"])
+
     def test_bad_work_fails_before_device_import(self):
         for argv in (["--batch", "0"], ["--heads", "-1"], ["--seq", "0"],
                      ["--head-dim", "96"], ["--iters", "0"], ["--device", "-1"]):

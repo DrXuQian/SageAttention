@@ -38,8 +38,8 @@ quant_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_int8_kernel' \
   "$out/device-functions.log")"
 value_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_value_int8_kernel' \
   "$out/device-functions.log")"
-if [[ "$attn_count" -ne 32 || "$quant_count" -ne 12 || "$value_count" -ne 4 ]]; then
-  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/32 quant=%s/12 value=%s/4\n' \
+if [[ "$attn_count" -ne 48 || "$quant_count" -ne 20 || "$value_count" -ne 4 ]]; then
+  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/48 quant=%s/20 value=%s/4\n' \
     "$attn_count" "$quant_count" "$value_count" >&2
   exit 1
 fi
@@ -56,10 +56,10 @@ import sys
 text = Path(sys.argv[1]).read_text()
 vregs = [int(value) for value in re.findall(r"vreg_number:(\d+)", text)]
 stacks = [int(value) for value in re.findall(r"STACK SIZE:(\d+)", text)]
-if len(vregs) != 48 or len(stacks) != 48:
+if len(vregs) != 72 or len(stacks) != 72:
     raise SystemExit(
-        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/48 "
-        f"stacks={len(stacks)}/48"
+        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/72 "
+        f"stacks={len(stacks)}/72"
     )
 private = [value for value in stacks if value]
 if max(vregs) > 256 or private:
@@ -68,7 +68,7 @@ if max(vregs) > 256 or private:
         f"{private}"
     )
 print(
-    f"[PPU Sage SDK] resources kernels=48 max_vregs={max(vregs)} "
+    f"[PPU Sage SDK] resources kernels=72 max_vregs={max(vregs)} "
     "spill_stack=0/PASS"
 )
 PY
@@ -104,10 +104,10 @@ python "$repo/dev/ppu_int8/check_bridge_codegen.py" \
   "$out/bridge-codegen-isa.log"
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
   "$out/shipping-isa.log"
-python "$repo/dev/ppu_int8/check_all_int8_codegen.py" "$out/shipping-isa.log"
+python "$repo/dev/ppu_int8/check_all_int8_codegen.py" "$out/shipping-isa.log" --permuted-k
 for plant in floating-mma missing-specialization; do
   if python "$repo/dev/ppu_int8/check_all_int8_codegen.py" \
-      "$out/shipping-isa.log" --plant "$plant" >"$out/all-int8-$plant.log" 2>&1; then
+      "$out/shipping-isa.log" --permuted-k --plant "$plant" >"$out/all-int8-$plant.log" 2>&1; then
     echo "[PPU Sage SDK] FAIL: all-int8 negative survived: $plant" >&2
     exit 1
   fi
