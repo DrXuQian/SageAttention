@@ -21,8 +21,15 @@
 #include "attn_ppu_int8_layout.cuh"
 #include "attn_ppu_probability.cuh"
 #include "attn_ppu_value_scale.cuh"
+#include "attn_ppu_denominator.cuh"
 
 namespace sageattention::ppu {
+
+struct RowDenominatorPeerXor {
+  __device__ __forceinline__ float operator()(float sum, int mask) const {
+    return __shfl_xor_sync(0xffffffffu, sum, mask);
+  }
+};
 
 template <typename Element, int CubeH>
 __device__ __forceinline__ void aiu_load_swizzled_64(

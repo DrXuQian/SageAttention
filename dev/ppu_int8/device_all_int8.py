@@ -7,10 +7,14 @@ from sageattention import ppu_compile, sageattn_qk_int8_pv_int8_ppu
 from all_int8_reference import from_quantized, quantize_value, unquantized
 
 
-def run_case(d, n, causal, layout, dtype, return_lse):
+def run_case(d, n, causal, layout, dtype, return_lse, query_len=None):
     torch.manual_seed(0x5A6E + d + n)
     # GQA 2:1, signs, distinct channels and a K64 boundary/tail.
-    q, k, v = [torch.randn(1, h, n, d, dtype=dtype, device="cuda") for h in (2, 1, 1)]
+    nq = n if query_len is None else query_len
+    if causal and nq != n:
+        raise ValueError("this oracle uses equal-length causal coordinates")
+    q, k, v = [torch.randn(1, h, length, d, dtype=dtype, device="cuda")
+               for h, length in ((2, nq), (1, n), (1, n))]
     if layout == "NHD":
         q, k, v = [x.transpose(1, 2).contiguous() for x in (q, k, v)]
     qi, qs, ki, ks = ppu_compile.quant_per_warp_int8(q, k, None, tensor_layout=layout)
@@ -50,7 +54,7 @@ def run_case(d, n, causal, layout, dtype, return_lse):
             raise AssertionError("all-INT8 replay bit pattern changed")
         if not torch.equal(replay_lse.view(torch.int32), lse_anchor.view(torch.int32)):
             raise AssertionError("all-INT8 LSE replay bit pattern changed")
-    print(f"[all-int8 device] D={d} N={n} causal={int(causal)} layout={layout} "
+    print(f"[all-int8 device] D={d} N={n} NQ={nq} causal={int(causal)} layout={layout} "
           f"dtype={dtype} lse={int(return_lse)} GQA=2:1 V_code_max_delta={code_delta} "
           f"max_quantized_oracle={(out.cpu().float()-expected).abs().max().item():.8g} "
           f"relative_rmse={relative:.8g} replay=8/8 PASS", flush=True)
@@ -86,6 +90,11 @@ def main():
         run_case(d, n, causal, layout, torch.bfloat16, lse)
     for lse in (False, True):
         run_case(128, 257, False, "NHD", torch.float16, lse)
+    # A denominator changes over 1153 K64 blocks in H3. Short fixtures cannot
+    # admit this reassociation. Sample five query rows, not a quadratic H3
+    # tensor, but execute the real long K loop, LSE and eight device replays.
+    for dtype in (torch.float16, torch.bfloat16):
+        run_case(128, 73774, False, "NHD", dtype, True, query_len=5)
     print("[all-int8 device] PASS: integer-PV oracle + V pack/tail + exact witness + GQA + dtype/layout/causal + replay")
 
 

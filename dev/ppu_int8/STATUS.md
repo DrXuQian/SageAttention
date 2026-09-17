@@ -1,9 +1,9 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 08:39:09 UTC
-- working-on: hot-loop report committed; handoff of PC-anchored account and rounding witnesses, no production change
+- updated-at: 2026-09-17 08:52:49 UTC
+- working-on: user-authorized deferred denominator implemented on INT8 experiment branch; local SDK/native and host gates pass, packaging isolated A/B handoff
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
-- numerical contract: unchanged P multiply/RNE/clamp, local P scale, V block/channel scale, FP32 softmax and accumulation order
+- numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
 - blocked-on: fresh PPU candidate numeric/latency/ACU execution; no PPU speedup or NVIDIA parity claimed
 - last-commit: d8082cd8ba2e44f3acfa7f35b64e4986b545f600 (completed report/code checkpoint; excludes this STATUS-only follow-up; immutable candidate source remains a49338f)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
@@ -18,4 +18,5 @@
 - accounting erratum: old static totals included 37 dead/foreign records; parser now follows reachable PCs and ELF section boundaries. 4046 old opcodes+operands match independent ACU; sum=337494189592, all extra PCs executed zero times. Integer category/deltas unchanged.
 - remaining gap: QK casts=64 common, PV casts=128 extra but native FP16-buffer has 128 HADD2.F32 restorations. Candidate integer sites=365 once-only+298 loop-union, not 663/iteration. P retiling=32 shuffles; denominator=8 shuffles/K64 versus native once at epilogue. Deferral has a one-ULP host witness; score FMA also changes rounding. Neither silently implemented.
 - new verification: parser 7/7; hot-account negatives 7/7; prior codegen negatives 7/7 expected-red; two arithmetic counterexamples plus exact controls; 16/16 FP16 streams unchanged; no new device measurement.
-- next: pending a49338f numeric/ACU; then separately gate deferred denominator (unchanged P/V format), score FMA second. Report: docs/PPU_INT8_REMAINING_GAP.md.
+- deferred denominator: 16/16 INT8 native K-loop shuffles 48->40 plus 8 post-loop; 16/16 FP16 and 16/16 quant native streams unchanged. H3 regs=246/128, stack=0; shared unchanged. Production-helper host 2560 traces/478720 updates worst relative error 4.47630923e-7 <=5e-4; four negatives red. No device run.
+- next: finish clean-source build + isolated prebuilt/A-B runner, then device correctness and ACU against a49338f. Score-FMA change remains separate and unimplemented.

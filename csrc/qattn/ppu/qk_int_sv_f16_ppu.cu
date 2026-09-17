@@ -312,8 +312,11 @@ __global__ void qk_int8_pv_kernel(
             tile_sum += s[base] + s[base + 1] + s[base + 2] + s[base + 3];
           }
         }
-        tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 1);
-        tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 2);
+        if constexpr (!Int8PV) {
+          // Keep the admitted FP16-PV arithmetic/order exactly as before.
+          tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 1);
+          tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 2);
+        }
         row_sum[qb][row_slot] =
             row_sum[qb][row_slot] * rescale + tile_sum * block_rescale;
       }
@@ -385,6 +388,21 @@ __global__ void qk_int8_pv_kernel(
             mma_f16f16f32(out[d][qb], probability[qb], v_fragment);
           }
         }
+      }
+    }
+  }
+
+  // Integer PV keeps four independent lane sums through K. The shared row
+  // maximum makes rescale/block_rescale uniform across peers, so sum once
+  // here, before BOTH O normalization and LSE. FP32 reassociation is intended;
+  // preserve the quantized oracle/tolerance and per-variant replay gates.
+  if constexpr (Int8PV) {
+#pragma unroll
+    for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
+#pragma unroll
+      for (int row_slot = 0; row_slot < 2; ++row_slot) {
+        row_sum[qb][row_slot] = finalize_row_denominator(
+            row_sum[qb][row_slot], RowDenominatorPeerXor{});
       }
     }
   }
