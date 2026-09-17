@@ -1,16 +1,20 @@
 # Dense SageAttention PPU wheel
 
-Source main: `11a60bf` (runtime repair `a9181bf`). This independent artifact branch
-stores the approximately 287 KB wheel as an ordinary Git blob; **Git LFS is not
-required**. The current version is **2.2.0.post1+ppu.torch29**, for **Python 3.12 / Torch 2.9.0 / C++11
+Source main: `fbf3d0f` (all-INT8 QK/PV). This independent artifact branch
+stores the approximately 497 KB wheel as an ordinary Git blob; **Git LFS is not
+required**. The current version is **2.2.0.post2+ppu.torch29**, for **Python 3.12 / Torch 2.9.0 / C++11
 ABI=1 / PPU0010**. No NVIDIA binaries or sparse/Radial kernels are built by
 this packaging step.
 
-The previous wheel requested missing `libhggcrt.12.0.so` through the SDK's
-legacy wrapper. **Use post1; do not symlink 13.0 to 12.0.** This repair binds the
-actual `libhggcrt.13.0.so` runtime and protects its entry points from a globally
-loaded old wrapper. All 28 device kernels / 43,024 instructions are unchanged.
-The old wheel is retained for reproducibility but `install.sh` selects only post1.
+Post2 changes the PPU `sageattn()` default to **S8 QK + U8xS8 PV**, with FP32
+softmax/cross-block accumulation. The named `sageattn_qk_int8_pv_fp16_ppu` path
+remains available. **PPU device correctness/performance are not yet measured**;
+run the new numeric admission before profiling or model deployment. This adds
+lossy P/V quantization; local random-input error is not model-quality evidence.
+
+Post2 retains the native `libhggcrt.13.0.so` bindings fixed in post1. **Do not
+symlink 13.0 to 12.0.** Older wheels are retained for reproducibility/rollback,
+but `install.sh` selects post2 from `release.json`. No device speedup is claimed.
 
 ```bash
 git clone --single-branch --branch ppu-wheels \
@@ -30,9 +34,28 @@ ABI again. `--no-deps` deliberately preserves the PPU Torch installation instead
 of downloading a public CUDA Torch wheel.
 
 `release.json` and the embedded `_ppu_wheel_manifest.json` distinguish packaging
-identity from the original kernel build identity. Source/ABI/hash checks, three
+identity from the native kernel build identity. Source/ABI/hash checks, three
 negative controls, local pip installation and installed-version rejection pass.
 The fixed extension also imports with the actual legacy SDK wrapper preloaded;
 the old extension and an unprotected direct relink reproduce the exact failure.
 A fresh box execution is not claimed. The SDK and Torch runtimes are required,
 not bundled with the wheel.
+
+Local hgcc/hgobjdump compiled all 48 kernels without private stack; all 16
+integer-PV attention bodies contain S8 QK/U8xS8 PV and zero floating MMA. Real
+CuTe traits anchor the exhaustive probability map. CPU numeric admission's
+worst relative RMSE is 1.55%; a single-head/five-query sample of S73774 is 1.49%.
+These do not replace a PPU numeric result or downstream model validation.
+
+After installing, restart any existing Python/ComfyUI process. In the source
+checkout (not this artifact branch):
+
+```bash
+git pull --ff-only
+PROFILE=1 bash tools/run_ppu_all_int8_box.sh
+```
+
+This runs correctness first, then captures B1/H56/S73774/D128/full Sage ACU,
+using the installed wheel. It never compiles on the box. Use
+`tools/run_ppu_sage_bf16_ab.sh --pv int8` or `--pv fp16` for the controlled
+latency comparison; preparation and core are separate reported spans.
