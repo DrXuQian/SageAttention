@@ -8,6 +8,19 @@ verify_installed_wheel(torch)
 from . import _qattn_ppu
 
 
+def quant_value_int8(v, tensor_layout="HND"):
+    if tensor_layout not in ("HND", "NHD"):
+        raise ValueError(f"Unknown tensor layout: {tensor_layout}")
+    layout = 0 if tensor_layout == "NHD" else 1
+    batch, d = v.size(0), v.size(-1)
+    length, heads = (v.size(1), v.size(2)) if layout == 0 else (v.size(2), v.size(1))
+    blocks = (length + 63) // 64
+    packed = torch.empty((batch, heads, blocks, d, 64), device=v.device, dtype=torch.int8)
+    scale = torch.empty((batch, heads, blocks, d), device=v.device, dtype=torch.float32)
+    _qattn_ppu.quant_value_int8(v, packed, scale, layout)
+    return packed, scale
+
+
 def quant_per_warp_int8(q, k, km=None, tensor_layout="HND"):
     layout = 0 if tensor_layout == "NHD" else 1
     if tensor_layout == "HND":
@@ -97,3 +110,30 @@ def _qk_int8_sv_f16_accum_f32_attn_fake(
             (batch, heads, qo_len), device=query.device, dtype=torch.float32
         )
     return torch.empty((0,), device=query.device, dtype=torch.float32)
+
+
+@torch.library.custom_op(
+    "sageattention::qk_int8_sv_int8_accum_f32_attn_ppu",
+    mutates_args=("output",), device_types="cuda",
+)
+def qk_int8_sv_int8_accum_f32_attn(
+    query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, output: torch.Tensor,
+    query_scale: torch.Tensor, key_scale: torch.Tensor, value_scale: torch.Tensor,
+    tensor_layout: int, is_causal: int, qk_quant_gran: int, sm_scale: float,
+    return_lse: int,
+) -> torch.Tensor:
+    return _qattn_ppu.qk_int8_sv_int8_accum_f32_attn(
+        query, key, value, output, query_scale, key_scale, value_scale,
+        tensor_layout, is_causal, qk_quant_gran, sm_scale, return_lse,
+    )
+
+
+@torch.library.register_fake("sageattention::qk_int8_sv_int8_accum_f32_attn_ppu")
+def _qk_int8_sv_int8_accum_f32_attn_fake(
+    query, key, value, output, query_scale, key_scale, value_scale,
+    tensor_layout, is_causal, qk_quant_gran, sm_scale, return_lse,
+):
+    return _qk_int8_sv_f16_accum_f32_attn_fake(
+        query, key, value, output, query_scale, key_scale,
+        tensor_layout, is_causal, qk_quant_gran, sm_scale, return_lse,
+    )

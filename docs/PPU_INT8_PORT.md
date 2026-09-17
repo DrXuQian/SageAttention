@@ -1,10 +1,15 @@
 # SageAttention INT8 on PPU through actlize
 
-This port follows the shipping SM80 FP32-accumulation algorithm in
+Current all-INT8 QK/PV work is specified in [`PPU_ALL_INT8.md`](PPU_ALL_INT8.md).
+The `post2` wheel selects it for PPU `sageattn()`; the named FP16-PV API remains
+available as the measured reference. The older device results below describe
+that FP16-PV reference, **not** a device admission of the new integer PV.
+
+The original FP16-PV port below follows the shipping SM80 FP32-accumulation algorithm in
 `csrc/qattn/qk_int_sv_f16_cuda_sm80.cu`; it does not translate its NVIDIA PTX.
 The PPU source graph is independent and contains no private inline assembly.
 
-## Algorithm crosswalk
+## Original FP16-PV algorithm crosswalk
 
 | Sage semantic step | PPU implementation |
 |---|---|
@@ -133,11 +138,15 @@ contract. The box receives an already-built wheel, not a rebuild command.
 
 The verified wheel is published on the independent
 [`ppu-wheels` artifact branch](https://github.com/DrXuQian/SageAttention/tree/ppu-wheels)
-at `be05a56`. It is an ordinary Git blob (no LFS required); `main` contains no new
+originally at `be05a56`. It is an ordinary Git blob (no LFS required); `main` contains no new
 wheel payload. The branch includes `release.json` and a checksum/ABI-verifying
 `install.sh`. Its exact filename is
 `sageattention-2.2.0.post1+ppu.torch29-cp312-cp312-linux_x86_64.whl`, SHA256
 `70409a902755efcbff7d06124ad871b627ad9e59ad448c8e69f2e4d5fba9f366`.
+
+That identifies the retained **post1 baseline**, not the latest all-INT8 build.
+The artifact branch's `release.json` is the current wheel/hash authority.
+See `PPU_ALL_INT8.md` for post2 admission and execution commands.
 
 `setup_ppu_wheel.py` packages the exact dense-only SDK output for
 `cpython312-torch2.9-cxx11abi1`. It verifies the compiled source hashes,
@@ -191,18 +200,21 @@ layout error.
 
 ### Same-input BF16 FlashAttention comparison
 
-`tools/run_ppu_sage_bf16_ab.sh` uses the installed **post1** Sage wheel and an
+`tools/run_ppu_sage_bf16_ab.sh` uses the installed Sage wheel and an
 installed `flash_attn_2_cuda`. It never builds, copies an old source-tree `.so`,
 or falls back to SDPA. It rotates three sequential event-timed arms on the same
-BF16 Q/K/V: native FA2 BF16 forward, prequantized Sage core, and Sage Q/K
-quantization + V cast + core. Outputs are BF16; Sage's internal V remains FP16.
+BF16 Q/K/V: native FA2 BF16 forward, prequantized Sage core, and Sage Q/K/V
+preparation + core. Outputs are BF16. The default `--pv int8` quantizes/transposes
+V; `--pv fp16` retains the old V cast and the measured FP16-PV reference.
 Input/output/quantization buffers are preallocated; FA's internal LSE/RNG buffer
 bookkeeping remains inside its native forward call. Kernel spans include host
 launch idle and are not profiler-derived device-only durations.
 
 ```bash
-# Historical attention SHAPE, newly measured BF16 comparison (not the old FP16 run):
+# Historical attention SHAPE, new integer-PV comparison:
 bash tools/run_ppu_sage_bf16_ab.sh
+# Retained FP16-PV algorithm, including support for a post1 wheel:
+bash tools/run_ppu_sage_bf16_ab.sh --pv fp16
 # The earlier MiniMax H3 attention shape; one launch/sample avoids a long run:
 HEADS=56 SEQ=73774 LAUNCHES=1 WARMUP=2 bash tools/run_ppu_sage_bf16_ab.sh
 # Optional matched causal comparison:
@@ -240,9 +252,11 @@ cd /workspace
 ```
 
 Use the already-working PPU runtime environment. `DEVICE` is the Torch-visible
-ordinal. The expected Sage kernel is `qk_int8_pv_f16_kernel`, grid `(577,56,1)`,
+ordinal. The post2 Sage kernel is `qk_int8_pv_kernel`, grid `(577,56,1)`,
 128 threads/CTA, noncausal. ACU can also list input initialization, Q/K
 quantization and the V cast: do not add those to the core kernel duration.
+Use `--pv int8` (default) for the new integer PV, `--pv fp16` for the reference.
+The final template boolean of `qk_int8_pv_kernel` identifies integer PV.
 ACU replay may execute the single requested call multiple times for counters.
 `--describe` and `dev/ppu_int8/check_attention_profile_target.py` validate the
 host-side plan only, not device correctness or performance.

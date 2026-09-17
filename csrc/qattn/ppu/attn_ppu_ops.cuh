@@ -17,6 +17,7 @@
 #include <cutlass/numeric_types.h>
 
 #include "attn_ppu_layout.cuh"
+#include "attn_ppu_int8_layout.cuh"
 
 namespace sageattention::ppu {
 
@@ -71,6 +72,34 @@ __device__ __forceinline__ void mma_f16f16f32(
       d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7],
       a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3],
       d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
+}
+
+__device__ __forceinline__ void mma_u8s8s32(
+    int32_t (&d)[8], uint32_t const (&a)[4], uint32_t const (&b)[4]) {
+  auto *du = reinterpret_cast<uint32_t *>(d);
+  cute::PPU0010_16x16x32_S32U8S8S32_TN::fma(
+      du[0], du[1], du[2], du[3], du[4], du[5], du[6], du[7],
+      a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3],
+      du[0], du[1], du[2], du[3], du[4], du[5], du[6], du[7]);
+}
+
+// Each source word packs one C-layout row's four local columns. Transpose
+// those bytes across the four row-peer lanes; no floating MMA or shared copy.
+__device__ __forceinline__ void probability_to_u8_operand(
+    uint32_t (&dst)[4], uint32_t const (&left)[2], uint32_t const (&right)[2]) {
+  int const lane = int(threadIdx.x) & 31;
+#pragma unroll
+  for (int word = 0; word < 4; ++word) {
+    uint32_t const source = (word & 1) ? right[word / 2] : left[word / 2];
+    uint32_t packed = 0;
+#pragma unroll
+    for (int byte = 0; byte < 4; ++byte) {
+      uint32_t const peer = __shfl_sync(
+          0xffffffffu, source, layout::probability_source_lane(lane, byte));
+      packed |= ((peer >> (8 * (lane & 3))) & 255u) << (8 * byte);
+    }
+    dst[word] = packed;
+  }
 }
 
 // CLayout and ALayout are different physical views on PPU0010.  Put the score

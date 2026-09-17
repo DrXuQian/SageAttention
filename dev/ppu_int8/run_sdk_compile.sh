@@ -32,13 +32,15 @@ fi
 "$sdk/bin/hgobjdump" --dump-resource-usage=all "$extension" >"$out/resources.log"
 "$sdk/bin/hgobjdump" --dump-isa "$extension" >"$out/shipping-isa.log"
 
-attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_f16_kernel' \
+attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_kernel' \
   "$out/device-functions.log")"
 quant_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_int8_kernel' \
   "$out/device-functions.log")"
-if [[ "$attn_count" -ne 16 || "$quant_count" -ne 12 ]]; then
-  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/16 quant=%s/12\n' \
-    "$attn_count" "$quant_count" >&2
+value_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_value_int8_kernel' \
+  "$out/device-functions.log")"
+if [[ "$attn_count" -ne 32 || "$quant_count" -ne 12 || "$value_count" -ne 4 ]]; then
+  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/32 quant=%s/12 value=%s/4\n' \
+    "$attn_count" "$quant_count" "$value_count" >&2
   exit 1
 fi
 if rg -q 'block_sparse_kernel|radial_sparse_kernel' "$out/device-functions.log"; then
@@ -54,10 +56,10 @@ import sys
 text = Path(sys.argv[1]).read_text()
 vregs = [int(value) for value in re.findall(r"vreg_number:(\d+)", text)]
 stacks = [int(value) for value in re.findall(r"STACK SIZE:(\d+)", text)]
-if len(vregs) != 28 or len(stacks) != 28:
+if len(vregs) != 48 or len(stacks) != 48:
     raise SystemExit(
-        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/28 "
-        f"stacks={len(stacks)}/28"
+        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/48 "
+        f"stacks={len(stacks)}/48"
     )
 private = [value for value in stacks if value]
 if max(vregs) > 256 or private:
@@ -66,7 +68,7 @@ if max(vregs) > 256 or private:
         f"{private}"
     )
 print(
-    f"[PPU Sage SDK] resources kernels=28 max_vregs={max(vregs)} "
+    f"[PPU Sage SDK] resources kernels=48 max_vregs={max(vregs)} "
     "spill_stack=0/PASS"
 )
 PY
@@ -100,9 +102,18 @@ python "$repo/dev/ppu_int8/check_bridge_codegen.py" \
   "$out/bridge-codegen-isa.log"
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
   "$out/shipping-isa.log"
+python "$repo/dev/ppu_int8/check_all_int8_codegen.py" "$out/shipping-isa.log"
+for plant in floating-mma missing-specialization; do
+  if python "$repo/dev/ppu_int8/check_all_int8_codegen.py" \
+      "$out/shipping-isa.log" --plant "$plant" >"$out/all-int8-$plant.log" 2>&1; then
+    echo "[PPU Sage SDK] FAIL: all-int8 negative survived: $plant" >&2
+    exit 1
+  fi
+  grep -q '\[all-int8 ISA\] FAIL:' "$out/all-int8-$plant.log"
+done
 
 sha256sum "$extension" | tee "$out/binary.sha256"
 python "$repo/tools/make_ppu_manifest.py" --artifact "$extension" \
   --sdk "$sdk" --resources "$out/resources.log"
-printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s; no device code executed\n' \
-  "$attn_count" "$quant_count"
+printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s value=%s; no device code executed\n' \
+  "$attn_count" "$quant_count" "$value_count"

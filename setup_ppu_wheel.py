@@ -64,7 +64,7 @@ class VerifiedPrebuilt(build_ext):
 torch_tag = ".".join(target["torch_public_version"].split(".")[:2]).replace(".", "")
 setup(
     name="sageattention",
-    version=f"2.2.0.post1+ppu.torch{torch_tag}",
+    version=f"2.2.0.post2+ppu.torch{torch_tag}",
     description="Dense actlize PPU SageAttention, verified prebuilt wheel",
     license="Apache-2.0",
     license_files=["LICENSE"],

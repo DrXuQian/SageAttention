@@ -1,0 +1,3 @@
+[all-int8 layout] map_bad=0/512 packed_word_bad=0/32768 V_bad=0/73728 integer_partial_bound=2072640
+[all-int8 negatives] lane=512/512 missing_half=256/512 bit=32768/32768 V_transpose=52365/73728 signed_P=128/256
+[all-int8 layout] PASS: real traits + packed words + V transpose/tail + five negatives

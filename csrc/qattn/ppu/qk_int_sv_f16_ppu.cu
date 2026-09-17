@@ -27,16 +27,17 @@ constexpr float kLog2E = 1.4426950408889634f;
 
 namespace detail {
 
-template <int HeadDim, bool Causal, bool ReturnLse, typename Output>
+template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV>
 __launch_bounds__(128, 1)
-__global__ void qk_int8_pv_f16_kernel(
+__global__ void qk_int8_pv_kernel(
     int8_t const *__restrict__ query,
     int8_t const *__restrict__ key,
-    cutlass::half_t const *__restrict__ value,
+    std::conditional_t<Int8PV, int8_t, cutlass::half_t> const *__restrict__ value,
     Output *__restrict__ output,
     float *__restrict__ lse,
     float const *__restrict__ query_scale,
     float const *__restrict__ key_scale,
+    float const *__restrict__ value_scale,
     int qo_len, int kv_len, int num_qo_heads, int num_kv_heads,
     int stride_bz_q, int stride_seq_q, int stride_h_q,
     int stride_bz_k, int stride_seq_k, int stride_h_k,
@@ -51,6 +52,7 @@ __global__ void qk_int8_pv_f16_kernel(
   constexpr int kQKSteps = HeadDim / 32;
   constexpr int kVBlocks = HeadDim / 16;
   constexpr int kHeadSlices = HeadDim / 64;
+  using Value = std::conditional_t<Int8PV, int8_t, cutlass::half_t>;
 
   int const lane = int(threadIdx.x);
   int const warp = int(threadIdx.y);
@@ -87,7 +89,7 @@ __global__ void qk_int8_pv_f16_kernel(
   extern __shared__ __align__(128) unsigned char smem_raw[];
   auto *smem_q = reinterpret_cast<int8_t *>(smem_raw);
   auto *smem_k = smem_q + kBlockQ * HeadDim;
-  auto *smem_v = reinterpret_cast<cutlass::half_t *>(
+  auto *smem_v = reinterpret_cast<Value *>(
       smem_k + kBlockKV * HeadDim);
 
   auto issue_k = [&](int kv_block) {
@@ -106,9 +108,18 @@ __global__ void qk_int8_pv_f16_kernel(
     if (lane == 0 && warp == 0) {
 #pragma unroll
       for (int cube = 0; cube < kHeadSlices; ++cube) {
-        aiu_load_swizzled_64<cutlass::half_t, kBlockKV>(
-            smem_v + cube * kBlockKV * 64, v_base,
-            kv_len, stride_seq_v, kv_block * kBlockKV, cube * 64);
+        if constexpr (Int8PV) {
+          // V was quantized/transposed into [B,H,K64-block,D,64]. This is
+          // the same non-transposed INT8 AIU/TSM path already used for K.
+          aiu_load_swizzled_64<int8_t, 64>(
+              smem_v + cube * 64 * 64,
+              v_base + int64_t(kv_block) * HeadDim * 64,
+              HeadDim, 64, cube * 64, 0);
+        } else {
+          aiu_load_swizzled_64<cutlass::half_t, kBlockKV>(
+              smem_v + cube * kBlockKV * 64, v_base,
+              kv_len, stride_seq_v, kv_block * kBlockKV, cube * 64);
+        }
       }
     }
     commit_async_group();
@@ -173,6 +184,8 @@ __global__ void qk_int8_pv_f16_kernel(
       int32_t integer[kQBlocksPerWarp][kKVBlocks][8];
       float fp32[kQBlocksPerWarp][kKVBlocks][8];
     } score;
+    uint32_t p_codes[Int8PV ? kQBlocksPerWarp : 1][Int8PV ? kKVBlocks : 1][2];
+    float p_scale[Int8PV ? kQBlocksPerWarp : 1][2];
 #pragma unroll
     for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
 #pragma unroll
@@ -249,6 +262,11 @@ __global__ void qk_int8_pv_f16_kernel(
 
         float const new_max = fmaxf(tile_max, row_max[qb][row_slot]);
         float const rescale = exp2f(row_max[qb][row_slot] - new_max);
+        float block_rescale = 1.0f;
+        if constexpr (Int8PV) {
+          block_rescale = exp2f(tile_max - new_max);
+          p_scale[qb][row_slot] = block_rescale / 255.0f;
+        }
         row_max[qb][row_slot] = new_max;
 #pragma unroll
         for (int d = 0; d < kVBlocks; ++d) {
@@ -263,38 +281,93 @@ __global__ void qk_int8_pv_f16_kernel(
         for (int kb = 0; kb < kKVBlocks; ++kb) {
           float *s = score.fp32[qb][kb];
           int const base = row_slot * 4;
-          s[base] = exp2f(s[base] - new_max);
-          s[base + 1] = exp2f(s[base + 1] - new_max);
-          s[base + 2] = exp2f(s[base + 2] - new_max);
-          s[base + 3] = exp2f(s[base + 3] - new_max);
-          tile_sum += s[base] + s[base + 1] + s[base + 2] + s[base + 3];
+          if constexpr (Int8PV) {
+            uint32_t packed = 0;
+#pragma unroll
+            for (int cs = 0; cs < 4; ++cs) {
+              float const p = s[base + cs] <= -1.0e29f ? 0.0f
+                  : exp2f(s[base + cs] - tile_max);
+              tile_sum += p;
+              uint32_t const code = uint32_t(max(0, min(255, __float2int_rn(p * 255.0f))));
+              packed |= code << (8 * cs);
+            }
+            p_codes[qb][kb][row_slot] = packed;
+          } else {
+            s[base] = exp2f(s[base] - new_max);
+            s[base + 1] = exp2f(s[base + 1] - new_max);
+            s[base + 2] = exp2f(s[base + 2] - new_max);
+            s[base + 3] = exp2f(s[base + 3] - new_max);
+            tile_sum += s[base] + s[base + 1] + s[base + 2] + s[base + 3];
+          }
         }
         tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 1);
         tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 2);
         row_sum[qb][row_slot] =
-            row_sum[qb][row_slot] * rescale + tile_sum;
+            row_sum[qb][row_slot] * rescale + tile_sum * block_rescale;
       }
     }
 
     wait_async_group<1>();
     __syncthreads();
-#pragma unroll
-    for (int kb = 0; kb < kKVBlocks; ++kb) {
-      uint32_t probability[kQBlocksPerWarp][4];
+    if constexpr (Int8PV) {
+      uint32_t probability[kQBlocksPerWarp][2][4];
 #pragma unroll
       for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
-        score_accumulator_to_pv_operand(
-            probability[qb], score.fp32[qb][kb]);
+#pragma unroll
+        for (int step = 0; step < 2; ++step) {
+          probability_to_u8_operand(probability[qb][step],
+                                    p_codes[qb][2 * step], p_codes[qb][2 * step + 1]);
+        }
       }
 #pragma unroll
       for (int d = 0; d < kVBlocks; ++d) {
-        int const column = d * 16;
-        uint32_t v_fragment[4];
-        load_swizzled_transposed<kBlockKV, kHeadSlices>(
-            v_fragment, smem_v, kb * 16, column % 64, column / 64);
+        float v_scales[4];
+#pragma unroll
+        for (int cs = 0; cs < 4; ++cs) {
+          int const channel = d * 16 + layout::accumulator_column(lane, cs);
+          v_scales[cs] = value_scale[
+              ((int64_t(batch) * num_kv_heads + kv_head) * k_scale_blocks + kv)
+              * HeadDim + channel];
+        }
+        int32_t partial[kQBlocksPerWarp][8] = {};
+#pragma unroll
+        for (int step = 0; step < 2; ++step) {
+          uint32_t v_fragment[4];
+          load_swizzled<int8_t, 64, kHeadSlices>(
+              v_fragment, smem_v, (d * 16) % 64, step * 32, d / 4);
+#pragma unroll
+          for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
+            mma_u8s8s32(partial[qb], probability[qb][step], v_fragment);
+          }
+        }
 #pragma unroll
         for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
-          mma_f16f16f32(out[d][qb], probability[qb], v_fragment);
+#pragma unroll
+          for (int e = 0; e < 8; ++e) {
+            out[d][qb][e] += float(partial[qb][e]) *
+                (p_scale[qb][layout::accumulator_row_slot(e)] * v_scales[e & 3]);
+          }
+        }
+      }
+    } else {
+#pragma unroll
+      for (int kb = 0; kb < kKVBlocks; ++kb) {
+        uint32_t probability[kQBlocksPerWarp][4];
+#pragma unroll
+        for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
+          score_accumulator_to_pv_operand(
+              probability[qb], score.fp32[qb][kb]);
+        }
+#pragma unroll
+        for (int d = 0; d < kVBlocks; ++d) {
+          int const column = d * 16;
+          uint32_t v_fragment[4];
+          load_swizzled_transposed<kBlockKV, kHeadSlices>(
+              v_fragment, smem_v, kb * 16, column % 64, column / 64);
+#pragma unroll
+          for (int qb = 0; qb < kQBlocksPerWarp; ++qb) {
+            mma_f16f16f32(out[d][qb], probability[qb], v_fragment);
+          }
         }
       }
     }
@@ -339,12 +412,12 @@ __global__ void qk_int8_pv_f16_kernel(
   }
 }
 
-template <int HeadDim, bool Causal, bool ReturnLse, typename Output>
+template <int HeadDim, bool Causal, bool ReturnLse, typename Output, bool Int8PV>
 void launch_ppu_attention(
     torch::Tensor const &query, torch::Tensor const &key,
     torch::Tensor const &value, torch::Tensor const &output,
     torch::Tensor const &lse, torch::Tensor const &query_scale,
-    torch::Tensor const &key_scale, int qo_len, int kv_len,
+    torch::Tensor const &key_scale, torch::Tensor const &value_scale, int qo_len, int kv_len,
     int num_qo_heads, int num_kv_heads,
     int stride_bz_q, int stride_seq_q, int stride_h_q,
     int stride_bz_k, int stride_seq_k, int stride_h_k,
@@ -354,8 +427,8 @@ void launch_ppu_attention(
   size_t const smem_bytes =
       kBlockQ * HeadDim * sizeof(int8_t)
       + kBlockKV * HeadDim * sizeof(int8_t)
-      + kBlockKV * HeadDim * sizeof(cutlass::half_t);
-  auto kernel = &qk_int8_pv_f16_kernel<HeadDim, Causal, ReturnLse, Output>;
+      + kBlockKV * HeadDim * (Int8PV ? sizeof(int8_t) : sizeof(cutlass::half_t));
+  auto kernel = &qk_int8_pv_kernel<HeadDim, Causal, ReturnLse, Output, Int8PV>;
   // The opt-in is a per-function property.  Reissuing it for every attention
   // op adds host/runtime work but cannot change the already-loaded kernel.
   static hggcError_t const attribute_status = hggcFuncSetAttribute(
@@ -369,10 +442,11 @@ void launch_ppu_attention(
   dim3 const block(32, kWarps);
   kernel<<<grid, block, smem_bytes>>>(
       query.data_ptr<int8_t>(), key.data_ptr<int8_t>(),
-      reinterpret_cast<cutlass::half_t const *>(value.data_ptr()),
+      reinterpret_cast<std::conditional_t<Int8PV, int8_t, cutlass::half_t> const *>(value.data_ptr()),
       reinterpret_cast<Output *>(output.data_ptr()),
       ReturnLse ? lse.data_ptr<float>() : nullptr,
       query_scale.data_ptr<float>(), key_scale.data_ptr<float>(),
+      Int8PV ? value_scale.data_ptr<float>() : nullptr,
       qo_len, kv_len, num_qo_heads, num_kv_heads,
       stride_bz_q, stride_seq_q, stride_h_q,
       stride_bz_k, stride_seq_k, stride_h_k,
@@ -383,13 +457,13 @@ void launch_ppu_attention(
               "PPU SageAttention launch failed: ", hggcGetErrorString(error));
 }
 
-template <int HeadDim, typename Output>
+template <int HeadDim, typename Output, bool Int8PV>
 void dispatch_flags(
     bool causal, bool return_lse,
     torch::Tensor const &query, torch::Tensor const &key,
     torch::Tensor const &value, torch::Tensor const &output,
     torch::Tensor const &lse, torch::Tensor const &query_scale,
-    torch::Tensor const &key_scale, int qo_len, int kv_len,
+    torch::Tensor const &key_scale, torch::Tensor const &value_scale, int qo_len, int kv_len,
     int num_qo_heads, int num_kv_heads,
     int stride_bz_q, int stride_seq_q, int stride_h_q,
     int stride_bz_k, int stride_seq_k, int stride_h_k,
@@ -397,8 +471,8 @@ void dispatch_flags(
     int stride_bz_o, int stride_seq_o, int stride_h_o,
     float softmax_scale) {
 #define SAGEATTN_PPU_LAUNCH(CAUSAL, LSE)                                      \
-  launch_ppu_attention<HeadDim, CAUSAL, LSE, Output>(                         \
-      query, key, value, output, lse, query_scale, key_scale,                 \
+  launch_ppu_attention<HeadDim, CAUSAL, LSE, Output, Int8PV>(                 \
+      query, key, value, output, lse, query_scale, key_scale, value_scale,    \
       qo_len, kv_len, num_qo_heads, num_kv_heads,                            \
       stride_bz_q, stride_seq_q, stride_h_q,                                 \
       stride_bz_k, stride_seq_k, stride_h_k,                                 \
@@ -417,10 +491,11 @@ void dispatch_flags(
 }  // namespace detail
 }  // namespace sageattention::ppu
 
-torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
+template <bool Int8PV>
+torch::Tensor attention_forward(
     torch::Tensor query, torch::Tensor key, torch::Tensor value,
     torch::Tensor output, torch::Tensor query_scale,
-    torch::Tensor key_scale, int tensor_layout, int is_causal,
+    torch::Tensor key_scale, torch::Tensor value_scale, int tensor_layout, int is_causal,
     int qk_quant_gran, float softmax_scale, int return_lse) {
   TORCH_CHECK(query.is_cuda() && key.is_cuda() && value.is_cuda() &&
                   output.is_cuda() && query_scale.is_cuda() && key_scale.is_cuda(),
@@ -434,22 +509,22 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
   TORCH_CHECK(query.scalar_type() == torch::kInt8 &&
                   key.scalar_type() == torch::kInt8,
               "PPU SageAttention Q and K must be int8");
-  TORCH_CHECK(value.scalar_type() == torch::kHalf,
-              "PPU SageAttention V must be fp16");
+  TORCH_CHECK(value.scalar_type() == (Int8PV ? torch::kInt8 : torch::kHalf),
+              "PPU SageAttention V dtype does not match the selected PV implementation");
   TORCH_CHECK(output.scalar_type() == torch::kHalf ||
                   output.scalar_type() == torch::kBFloat16,
               "PPU SageAttention output must be fp16 or bf16");
   TORCH_CHECK(query_scale.scalar_type() == torch::kFloat32 &&
                   key_scale.scalar_type() == torch::kFloat32,
               "PPU SageAttention scales must be fp32");
-  TORCH_CHECK(query.dim() == 4 && key.dim() == 4 && value.dim() == 4 &&
+  TORCH_CHECK(query.dim() == 4 && key.dim() == 4 && value.dim() == (Int8PV ? 5 : 4) &&
                   output.dim() == 4 && query_scale.dim() == 3 &&
                   key_scale.dim() == 3,
-              "PPU SageAttention expects rank-4 Q/K/V/O and rank-3 scales");
+              "PPU SageAttention requires rank-4 Q/K/O, rank-3 Q/K scales; V is rank-5 for INT8 PV, rank-4 for FP16 PV");
   TORCH_CHECK(query.is_contiguous() && key.is_contiguous() &&
                   query_scale.is_contiguous() && key_scale.is_contiguous(),
               "PPU SageAttention requires contiguous Q/K and scale tensors");
-  TORCH_CHECK(value.stride(3) == 1 && output.stride(3) == 1,
+  TORCH_CHECK((Int8PV ? value.is_contiguous() : value.stride(3) == 1) && output.stride(3) == 1,
               "PPU SageAttention requires contiguous head dimension for V/O");
   TORCH_CHECK(qk_quant_gran == 2,
               "PPU SageAttention first shipping path supports per-warp Q and per-block K quantization only");
@@ -503,7 +578,21 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
   TORCH_CHECK(key.size(0) == batch && value.size(0) == batch &&
                   output.size(0) == batch,
               "Q/K/V/O batch dimensions must match");
-  if (tensor_layout == 0) {
+  if constexpr (Int8PV) {
+    stride_seq_v = 0;
+    stride_h_v = int(value.stride(1));
+    int const blocks = (kv_len + 63) / 64;
+    TORCH_CHECK(value.size(1) == num_kv_heads && value.size(2) == blocks &&
+                    value.size(3) == head_dim && value.size(4) == 64,
+                "INT8 V must have packed shape [B,Hkv,ceil(K/64),D,64]");
+    TORCH_CHECK(value_scale.is_cuda() && value_scale.get_device() == query.get_device() &&
+                    value_scale.scalar_type() == torch::kFloat32 && value_scale.is_contiguous() &&
+                    value_scale.dim() == 4 && value_scale.size(0) == batch &&
+                    value_scale.size(1) == num_kv_heads && value_scale.size(2) == blocks &&
+                    value_scale.size(3) == head_dim,
+                "INT8 V scales must have shape [B,Hkv,ceil(K/64),D]");
+    TORCH_CHECK(key.size(3) == head_dim, "K head dimension mismatch");
+  } else if (tensor_layout == 0) {
     TORCH_CHECK(int(value.size(1)) == kv_len &&
                     int(value.size(2)) == num_kv_heads &&
                     int(key.size(3)) == head_dim &&
@@ -535,9 +624,9 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
       : torch::empty({0}, query.options().dtype(torch::kFloat32));
 
 #define SAGEATTN_PPU_DISPATCH(HEAD_DIM, OUTPUT_TYPE)                           \
-  sageattention::ppu::detail::dispatch_flags<HEAD_DIM, OUTPUT_TYPE>(          \
+  sageattention::ppu::detail::dispatch_flags<HEAD_DIM, OUTPUT_TYPE, Int8PV>(  \
       is_causal != 0, return_lse != 0,                                       \
-      query, key, value, output, lse, query_scale, key_scale,                 \
+      query, key, value, output, lse, query_scale, key_scale, value_scale,    \
       qo_len, kv_len, num_qo_heads, num_kv_heads,                            \
       int(query.stride(0)), stride_seq_q, stride_h_q,                         \
       int(key.stride(0)), stride_seq_k, stride_h_k,                           \
@@ -552,4 +641,20 @@ torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
   }
 #undef SAGEATTN_PPU_DISPATCH
   return lse;
+}
+
+torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
+    torch::Tensor q, torch::Tensor k, torch::Tensor v, torch::Tensor o,
+    torch::Tensor qs, torch::Tensor ks, int layout, int causal, int gran,
+    float scale, int lse) {
+  return attention_forward<false>(q, k, v, o, qs, ks, torch::Tensor{},
+                                  layout, causal, gran, scale, lse);
+}
+
+torch::Tensor qk_int8_sv_int8_accum_f32_attn_ppu(
+    torch::Tensor q, torch::Tensor k, torch::Tensor v, torch::Tensor o,
+    torch::Tensor qs, torch::Tensor ks, torch::Tensor vs, int layout, int causal,
+    int gran, float scale, int lse) {
+  return attention_forward<true>(q, k, v, o, qs, ks, vs,
+                                 layout, causal, gran, scale, lse);
 }

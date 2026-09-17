@@ -3,6 +3,15 @@
 
 #include <torch/extension.h>
 
+torch::Tensor qk_int8_sv_int8_accum_f32_attn_ppu(
+    torch::Tensor query, torch::Tensor key, torch::Tensor value,
+    torch::Tensor output, torch::Tensor query_scale, torch::Tensor key_scale,
+    torch::Tensor value_scale, int tensor_layout, int is_causal,
+    int qk_quant_gran, float softmax_scale, int return_lse);
+
+void quant_value_int8_ppu(torch::Tensor input, torch::Tensor output,
+                         torch::Tensor scale, int tensor_layout);
+
 torch::Tensor qk_int8_sv_f16_accum_f32_attn_ppu(
     torch::Tensor query,
     torch::Tensor key,

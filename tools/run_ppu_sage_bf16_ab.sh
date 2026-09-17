@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Installed post1 Sage wheel + installed FA2; no build or in-place .so copy.
+# Installed Sage wheel + installed FA2; no build or in-place .so copy.
+# post2 defaults to INT8 PV; pass --pv fp16 for the retained historical arm.
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 sdk="${PPU_SDK:-/workspace/ppu-sdk-2.1.1-a5c56e/PPU_SDK}"

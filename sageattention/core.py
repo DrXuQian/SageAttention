@@ -148,7 +148,7 @@ def sageattn(
     """
         
     if PPU_ENABLED:
-        return sageattn_qk_int8_pv_fp16_ppu(
+        return sageattn_qk_int8_pv_int8_ppu(
             q, k, v, tensor_layout=tensor_layout, is_causal=is_causal,
             sm_scale=sm_scale, return_lse=return_lse, **kwargs
         )
@@ -170,7 +170,17 @@ def sageattn(
         raise ValueError(f"Unsupported CUDA architecture: {arch}")
 
 
-def sageattn_qk_int8_pv_fp16_ppu(
+def sageattn_qk_int8_pv_fp16_ppu(q, k, v, *args, **kwargs):
+    """Retained PPU INT8-QK / FP16-PV reference path."""
+    return _sageattn_ppu(q, k, v, *args, int8_pv=False, **kwargs)
+
+
+def sageattn_qk_int8_pv_int8_ppu(q, k, v, *args, **kwargs):
+    """PPU INT8-QK / U8xS8-PV; FP32 softmax and cross-block accumulation."""
+    return _sageattn_ppu(q, k, v, *args, int8_pv=True, **kwargs)
+
+
+def _sageattn_ppu(
     q: torch.Tensor,
     k: torch.Tensor,
     v: torch.Tensor,
@@ -179,9 +189,11 @@ def sageattn_qk_int8_pv_fp16_ppu(
     sm_scale: Optional[float] = None,
     smooth_k: bool = True,
     return_lse: bool = False,
+    *,
+    int8_pv: bool,
     **kwargs: Any,
 ):
-    """Actlize-backed PPU QK-int8 / PV-fp16 SageAttention forward."""
+    """Shared input validation, Q/K preparation and output/LSE handling."""
     if not PPU_ENABLED:
         raise RuntimeError("PPU SageAttention extension is not installed")
     if kwargs:
@@ -251,12 +263,19 @@ def sageattn_qk_int8_pv_fp16_ppu(
     q_int8, q_scale, k_int8, k_scale = ppu_compile.quant_per_warp_int8(
         q, k, km, tensor_layout=tensor_layout
     )
-    v_fp16 = v.to(torch.float16)
     output = torch.empty(q.shape, dtype=q.dtype, device=q.device)
-    lse = ppu_compile.qk_int8_sv_f16_accum_f32_attn(
-        q_int8, k_int8, v_fp16, output, q_scale, k_scale,
-        layout, int(is_causal), 2, float(sm_scale), int(return_lse)
-    )
+    if int8_pv:
+        v_int8, v_scale = ppu_compile.quant_value_int8(v, tensor_layout=tensor_layout)
+        lse = ppu_compile.qk_int8_sv_int8_accum_f32_attn(
+            q_int8, k_int8, v_int8, output, q_scale, k_scale, v_scale,
+            layout, int(is_causal), 2, float(sm_scale), int(return_lse)
+        )
+    else:
+        v_fp16 = v.to(torch.float16)
+        lse = ppu_compile.qk_int8_sv_f16_accum_f32_attn(
+            q_int8, k_int8, v_fp16, output, q_scale, k_scale,
+            layout, int(is_causal), 2, float(sm_scale), int(return_lse)
+        )
     output = output[..., :original_head_dim]
     if return_lse:
         lse = lse / 1.4426950408889634
