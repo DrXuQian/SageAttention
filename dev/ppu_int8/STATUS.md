@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 10:47:19 UTC
-- working-on: local candidate and report reader ready; preserve711ec99/42702fd4 binary while waiting for PPU device evidence, no further unmeasured production change
+- updated-at: 2026-09-17 12:06:19 UTC
+- working-on: closing identity-rescale screen:3 rejected full native candidates,production restored; preserve711ec99/42702fd4 binary and FP16 default
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
 - blocked-on: no fresh candidate numeric/events/ACU bundle; local hggcGetDeviceCount rc999 and ppu-smi(driver is not loaded) confirm device validation unavailable here; no parity/speed verdict
-- last-commit: 4a0155b (MMA-zero compiler evidence; current reader/status follow-up excluded)
+- last-commit: 9004faa (fresh ACU reader; completed identity-rescale evidence pending commit)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
@@ -31,3 +31,4 @@
 - K-permutation clean artifact: source711ec99,DSO42702fd43a5cce73acd0c38967ab568f519cca67ffc0d98bf847a6a8591beea2,72/72 trial/clean native streams identical. Real isolated Torch2.9 import (with global legacy shim),both new endpoints' CPU-input rejection,three manifest identity negatives plus unsupported-runtime selection pass. Old NVIDIA-host-oracle wrapper SKIP(nvcc unavailable); its actual CuTe layout oracle was compiled/run with host C++ and real SDK headers,PASS. No claim that SKIP is PASS; native PPU compilation did run.
 - MMA zero source screen: with full shipping HGGC flags,four first-product spellings emit identical29-op bodies with8 C clears; shared-constant/shared-opaque eight-product variants emit identical197-op bodies with64 C clears.9+2 native types,stack0; scalar0 rejects i32 versus vector8. Real H3 CFG/def-use ties192 zero definitions to8 QK+16 PV first products on every loop path; four negatives red. No production edit, binary/default/runners unchanged. This bounds tested SDK lowering choices, not all possible hardware/algorithms. Goal still open; no new dynamic count or latency inferred.
 - fresh-report admission: account_hot_loop now selects raw/permuted H3 explicitly and accepts candidate-acu only after exact symbol/layout and every PC/opcode/operand binding plus two MMA totals.8 core+3 candidate negative cases pass. Missing candidate export produces no candidate_measured field; replaying the OLD report against its OLD body reproduces337494189592 solely as a parser regression test,not a new device result. Numerical correctness/normal latency remain separate required inputs.
+- identity-rescale screen:3 full72-type native builds,68 unchanged/4 scoped; skip exactly128 output multiplies on the identity path. H3 shortest/worst1569/1876 becomes1456/1891,1468/1903,1459/1894 but registers244->250/250/248; all rejected under prior244 cap,not a measured slowdown verdict. CPU16711680 pairs and256 warp masks raw-equal; FTZ-only counterexample retained and real descriptor flush0 checked.3 numeric+5 native negatives required; kernel restored exactly,existing binary42702fd4 unchanged,no trial artifact published.

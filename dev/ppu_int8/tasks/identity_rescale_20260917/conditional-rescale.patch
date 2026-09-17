@@ -1,0 +1,23 @@
+diff --git a/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu b/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
+--- a/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
++++ b/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
+@@ -287,7 +287,12 @@
+-#pragma unroll
+-        for (int d = 0; d < kVBlocks; ++d) {
+-#pragma unroll
+-          for (int e = row_slot * 4; e < row_slot * 4 + 4; ++e) {
+-            out[d][qb][e] *= rescale;
+-          }
+-        }
++        // Only the explicit permuted-K full-D128 experiment changes here.
++        // Retain the general multiply for every nonidentity factor; neither
++        // probabilities nor quantization/denominator arithmetic change.
++        if (!KeyRowsPermuted || HeadDim != 128 || Causal || rescale != 1.0f) {
++#pragma unroll
++          for (int d = 0; d < kVBlocks; ++d) {
++#pragma unroll
++            for (int e = row_slot * 4; e < row_slot * 4 + 4; ++e) {
++              out[d][qb][e] *= rescale;
++            }
++          }
++        }

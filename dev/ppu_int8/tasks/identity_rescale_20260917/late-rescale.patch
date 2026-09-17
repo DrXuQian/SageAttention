@@ -1,0 +1,41 @@
+diff --git a/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu b/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
+index 713a560..78ebbc8 100644
+--- a/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
++++ b/csrc/qattn/ppu/qk_int_sv_f16_ppu.cu
+@@ -284,10 +284,12 @@ __global__ void qk_int8_pv_kernel(
+           p_scale[qb][row_slot] = block_rescale / 255.0f;
+         }
+         row_max[qb][row_slot] = new_max;
++        if constexpr (!(KeyRowsPermuted && HeadDim == 128 && !Causal)) {
+ #pragma unroll
+-        for (int d = 0; d < kVBlocks; ++d) {
++          for (int d = 0; d < kVBlocks; ++d) {
+ #pragma unroll
+-          for (int e = row_slot * 4; e < row_slot * 4 + 4; ++e) {
+-            out[d][qb][e] *= rescale;
++            for (int e = row_slot * 4; e < row_slot * 4 + 4; ++e) {
++              out[d][qb][e] *= rescale;
++            }
+           }
+         }
+@@ -331,6 +333,20 @@ __global__ void qk_int8_pv_kernel(
+           tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 1);
+           tile_sum += __shfl_xor_sync(0xffffffffu, tile_sum, 2);
+         }
++        // In the explicit full-D128 permuted-K candidate, wait until this
++        // row's score/P temporaries are dead before conditionally updating O.
++        // Exact identity only: do not skip a factor merely close to one.
++        if constexpr (KeyRowsPermuted && HeadDim == 128 && !Causal) {
++          if (rescale != 1.0f) {
++#pragma unroll
++            for (int d = 0; d < kVBlocks; ++d) {
++#pragma unroll
++              for (int e = row_slot * 4; e < row_slot * 4 + 4; ++e) {
++                out[d][qb][e] *= rescale;
++              }
++            }
++          }
++        }
+         row_sum[qb][row_slot] =
+             row_sum[qb][row_slot] * rescale + tile_sum * block_rescale;
+       }
