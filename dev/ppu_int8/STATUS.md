@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 10:18:07 UTC
-- working-on: b4cad9d isolated K-permutation binary pushed and verified; PPU numeric/events/ACU command delivered, no dynamic instruction-parity or speed claim
+- updated-at: 2026-09-17 10:39:22 UTC
+- working-on: MMA zero-source screen closed with no codegen gain; document current SDK boundary, keep delivered K-permutation binary frozen pending PPU numeric/events/ACU
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
 - blocked-on: fresh PPU numeric/latency/ACU execution after local artifact handoff; no PPU speedup or NVIDIA parity claimed
-- last-commit: b4cad9d (published artifact/source follow-up; this status-only checkpoint excluded)
+- last-commit: 37ac724 (published K-permutation checkpoint; current local-only zero-source evidence follow-up excluded)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
@@ -29,3 +29,4 @@
 - K-permutation SDK r2:72/72 types,zero private stack; H3 complete-block shuffle40->8 (tail40 retained),regs248/104 versus raw246/128. REJECT_RESOURCE under predeclared246 vector-register cap; no device evidence,no new binary published. Old48 native streams unchanged in r1; r2 full replay still to be checked.
 - K-permutation SDK r3:72/72 types,old48 native opcode+operand streams unchanged,H3 regs244/104 and stack0. Full/tail/final shuffles8/40/8. Six codegen negatives red; five layout negatives red; tensor reference768 cases and paired-timing8/profile7 tests pass. Prepared explicit runner measures raw INT8/FP16/new INT8 plus K quant and K-prepare+core,with numeric gate before events and separate ACU. Device NOT_RUN.
 - K-permutation clean artifact: source711ec99,DSO42702fd43a5cce73acd0c38967ab568f519cca67ffc0d98bf847a6a8591beea2,72/72 trial/clean native streams identical. Real isolated Torch2.9 import (with global legacy shim),both new endpoints' CPU-input rejection,three manifest identity negatives plus unsupported-runtime selection pass. Old NVIDIA-host-oracle wrapper SKIP(nvcc unavailable); its actual CuTe layout oracle was compiled/run with host C++ and real SDK headers,PASS. No claim that SKIP is PASS; native PPU compilation did run.
+- MMA zero source screen: with full shipping HGGC flags,four first-product spellings emit identical29-op bodies with8 C clears; shared-constant/shared-opaque eight-product variants emit identical197-op bodies with64 C clears.9+2 native types,stack0; scalar0 rejects i32 versus vector8. Real H3 CFG/def-use ties192 zero definitions to8 QK+16 PV first products on every loop path; four negatives red. No production edit, binary/default/runners unchanged. This bounds tested SDK lowering choices, not all possible hardware/algorithms. Goal still open; no new dynamic count or latency inferred.
