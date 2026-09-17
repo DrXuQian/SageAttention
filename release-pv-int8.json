@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "package": "sageattention",
+  "version": "2.2.0.post2+ppu.torch29",
+  "wheel": "sageattention-2.2.0.post2+ppu.torch29-cp312-cp312-linux_x86_64.whl",
+  "wheel_sha256": "b98450efaf2e800420188f3a0bfe6bffe460b6d0e67f525d11eca19fd64233a5",
+  "package_source_sha": "fbf3d0feb1d356d7f4bad4713955de9a6e46f864",
+  "native_sha256": "98c43ca4d30c16ef260114588b51ba9f81ef66dd37f5296f6b3de06bc7b4077f",
+  "native_build_source_sha": "fbf3d0feb1d356d7f4bad4713955de9a6e46f864",
+  "actlize_sha": "9d063e4c5fde5119d4d68bfbe124aacd8ed2ec88",
+  "target": "PPU0010, Python 3.12, Torch 2.9.0, C++11 ABI=1",
+  "storage": "ordinary Git on dedicated artifact branch; no LFS",
+  "scope": "Opt-in original post2 integer-PV baseline; experiment/ppu-pv-int8; later local requant optimization NOT included",
+  "device_admission": "NOT RUN; run tools/run_ppu_all_int8_box.sh before profiling or model deployment",
+  "native_runtime": "libhggcrt.13.0.so; hidden bindings resist global legacy shim interposition",
+  "local_checks": [
+    "prebuilt source/actlize/target/hash verification",
+    "wheel has exactly one native payload, matching size and SHA256",
+    "pip --target installation",
+    "wrong Torch version, wrong C++ ABI, changed payload rejected",
+    "old wrapper reproduces absent libhggcrt.12.0.so; direct-only interposition negative was established in post1 (not rerun for post2)",
+    "new extension imports with legacy SDK shim globally preloaded; CPU tensor rejection crosses Torch ABI safely",
+    "real SDK/CuTe host oracle: map 0/512, packed words 0/32768, V 0/73728; five planted errors reject",
+    "CPU numeric: 24 fixed cases worst relative RMSE 0.01548991; S73774 one head/five rows 0.01486595, not model quality",
+    "four zero/cancellation cases HND/NHD exact absolute zero",
+    "48 device specializations no private stack; all 16 integer-PV bodies have zero floating MMA, static QK/PV D128 32/32",
+    "floating-MMA injection and missing-specialization codegen negatives reject",
+    "installed wheel import plus new custom-op fake/LSE ABI, no device execution"
+  ],
+  "default_pv": "int8",
+  "channel": "experimental"
+}
