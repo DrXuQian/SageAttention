@@ -37,7 +37,8 @@ of downloading a public CUDA Torch wheel.
 identity from the native kernel build identity. Source/ABI/hash checks, three
 negative controls, local pip installation and installed-version rejection pass.
 The fixed extension also imports with the actual legacy SDK wrapper preloaded;
-the old extension and an unprotected direct relink reproduce the exact failure.
+the old extension reproduces the exact failure. The unprotected direct-relink
+negative was established in post1 and was not rerun for post2.
 A fresh box execution is not claimed. The SDK and Torch runtimes are required,
 not bundled with the wheel.
 
