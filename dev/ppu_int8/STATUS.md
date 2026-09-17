@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 12:06:19 UTC
-- working-on: closing identity-rescale screen:3 rejected full native candidates,production restored; preserve711ec99/42702fd4 binary and FP16 default
+- updated-at: 2026-09-17 12:11:05 UTC
+- working-on: identity-rescale screen completed and recorded;3 resource-rejected candidates,production/source and711ec99/42702fd4 binary unchanged; FP8 alignment remains open
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
 - blocked-on: no fresh candidate numeric/events/ACU bundle; local hggcGetDeviceCount rc999 and ppu-smi(driver is not loaded) confirm device validation unavailable here; no parity/speed verdict
-- last-commit: 9004faa (fresh ACU reader; completed identity-rescale evidence pending commit)
+- last-commit: 1fe96c5 (completed identity-rescale evidence; this metadata-only checkpoint excluded)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
