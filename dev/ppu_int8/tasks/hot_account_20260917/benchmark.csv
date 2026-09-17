@@ -1,0 +1,4 @@
+candidate,scope,device,median_us,measurement,evidence
+native-account,H3 instruction investigation,PPU,,NOT_RUN,existing ACU and native SDK ISA only
+deferred-denominator,host rounding witness,CPU,,NOT_A_PERFORMANCE_MEASUREMENT,0x46902000 vs 0x46902001
+score-scale-fma,host rounding witness,CPU,,NOT_A_PERFORMANCE_MEASUREMENT,0 vs 0x364a8000

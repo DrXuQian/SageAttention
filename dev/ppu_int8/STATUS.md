@@ -1,17 +1,21 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 07:24:27 UTC
-- working-on: local closure complete; publishing isolated experimental prebuilt and execution-only numerical/ACU runner
+- updated-at: 2026-09-17 08:36:54 UTC
+- working-on: local hot-loop investigation complete; publishing PC-anchored accounting and two rounding counterexamples, no production change
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: unchanged P multiply/RNE/clamp, local P scale, V block/channel scale, FP32 softmax and accumulation order
 - blocked-on: fresh PPU candidate numeric/latency/ACU execution; no PPU speedup or NVIDIA parity claimed
-- last-commit: a49338f (clean source revision of the compiled candidate)
+- last-commit: 97ea065672d3dd5e69c3f568590d9c149bb2c00e (reporting work in progress; immutable candidate source remains a49338f)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
-- local results: H3 static integer/bit ALU 1136->832 (-26.76%), total 4083->3709 (-9.16%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
+- local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
 - measured comparison: PPU post2 integer/bit/select 566.20 per warp/K64 vs NVIDIA FP8 62.32; full counts 2264.71 vs 986.05 (FP16 buffer) / 845.96 (FP32); different MMA shapes explicitly normalized
 - main/artifacts: main 2d890e7 and ppu-wheels d713b01 pushed; FP16-PV default and unchanged post1 wheel; INT8 branch + post2 opt-in retained
-- row-mask checkpoint: 1065024 host pairs raw-equal, all-masked negative red; shipping H3 static instructions 3709->3592, integer/bit ALU 832->772; all 16 FP16 instruction streams identical; all 16 INT8 arithmetic/barrier inventories preserved; SDK 48/48 zero private stack; device timing NOT RUN
+- row-mask checkpoint: 1065024 host pairs raw-equal, all-masked negative red; shipping H3 reachable instructions 3672->3555, integer/bit ALU 832->772; all 16 FP16 instruction streams identical; all 16 INT8 arithmetic/barrier inventories preserved; SDK 48/48 zero private stack; device timing NOT RUN
 - inverse-pack verdict: 1065353217 FP32 inputs exhausted, strict magic pack raw-equal but native probe 23 vs 22 instructions; fused version differs at 128/765 rounding-boundary neighbours; NOT ADOPTED
-- V-scale checkpoint: host 69600 blocks / 6681600 publications / 213811200 reads raw-equal; missing owner, wrong head pitch, payload overlap and wrong column negatives red. Unscoped native H3 total 3592->3492, integer ALU 772->663, vregs 250->246, sregs 112->128, shared +512 B, stack 0; do not apply to D64/causal (integer ALU slightly increases).
+- V-scale checkpoint: host 69600 blocks / 6681600 publications / 213811200 reads raw-equal; missing owner, wrong head pitch, payload overlap and wrong column negatives red. Native H3 reachable total 3555->3455, integer ALU 772->663, vregs 250->246, sregs 112->128, shared +512 B, stack 0; do not apply to D64/causal (integer ALU slightly increases).
 - final: clean a49338f SDK build 48/48 zero private stack; complete native instruction/operand replay 48/48 identical to scoped candidate. DSO dc50962536e79bf8ec636ece3c0d2a5070d8a416ae05d82270f11c0aee6e126c; runtime libhggcrt.13.0.so; isolated package import and CPU-input rejection PASS. New artifact is opt-in on experiment branch, not the default wheel.
+- accounting erratum: old static totals included 37 dead/foreign records; parser now follows reachable PCs and ELF section boundaries. 4046 old opcodes+operands match independent ACU; sum=337494189592, all extra PCs executed zero times. Integer category/deltas unchanged.
+- remaining gap: QK casts=64 common, PV casts=128 extra but native FP16-buffer has 128 HADD2.F32 restorations. Candidate integer sites=365 once-only+298 loop-union, not 663/iteration. P retiling=32 shuffles; denominator=8 shuffles/K64 versus native once at epilogue. Deferral has a one-ULP host witness; score FMA also changes rounding. Neither silently implemented.
+- new verification: parser 7/7; hot-account negatives 7/7; prior codegen negatives 7/7 expected-red; two arithmetic counterexamples plus exact controls; 16/16 FP16 streams unchanged; no new device measurement.
+- next: pending a49338f numeric/ACU; then separately gate deferred denominator (unchanged P/V format), score FMA second. Report: docs/PPU_INT8_REMAINING_GAP.md.

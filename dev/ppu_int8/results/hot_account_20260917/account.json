@@ -1,0 +1,394 @@
+{
+  "scope": "STATIC_CFG_BOUND_FOR_CANDIDATE; OLD_ACU_ONLY; NO_NEW_DEVICE_RESULT",
+  "warps": 129248,
+  "k64_iterations": 1153,
+  "visits": 149022944,
+  "input_sha256": {
+    "before": "437b453d37f038520b70cf1f0e179e551230232b3ec5fcc3124f97586544ef2d",
+    "after": "b32d11259bc45065ba662d8092ffeaf36ea402ea4b99d1282627ea1a4520b89d",
+    "acu": "f58d3916ca75a96d285711666cef87f6325e58f1604b6acb4256b582ca9d0b94",
+    "reference": "b31d044738902bcc323dcc40a430ce73a7e313332fe976942643fb6b843e7d00"
+  },
+  "integer_category_note": "fixed static scope also includes s.not/s.mull/s.mulh; old reference excludes these once-only ops (0.011275 per visit)",
+  "before": {
+    "kernel": "_ZN13sageattention3ppu6detail17qk_int8_pv_kernelILi128ELb0ELb0EN7cutlass10bfloat16_tELb1EEEvPKaS6_PKNSt11conditionalIXT3_EaNS3_6half_tEE4typeEPT2_PfPKfSH_SH_iiiiiiiiiiiiiiiif",
+    "loop_header": "0x3dd8",
+    "mask_then_only_proofs": 2,
+    "reachable_instructions": 4046,
+    "discarded": 21,
+    "groups": {
+      "all": {
+        "whole_static": 4046,
+        "loop_union_static": 2667,
+        "once_only_union_static": 1379,
+        "cfg_path_min": 2258,
+        "cfg_path_max": 2490,
+        "conservative_max_per_visit": 2491.1960104076325
+      },
+      "integer_bit_select": {
+        "whole_static": 1136,
+        "loop_union_static": 769,
+        "once_only_union_static": 367,
+        "cfg_path_min": 564,
+        "cfg_path_max": 769,
+        "conservative_max_per_visit": 769.3183000867302
+      },
+      "shuffle": {
+        "whole_static": 80,
+        "loop_union_static": 80,
+        "once_only_union_static": 0,
+        "cfg_path_min": 80,
+        "cfg_path_max": 80,
+        "conservative_max_per_visit": 80.0
+      },
+      "s32_to_f32": {
+        "whole_static": 252,
+        "loop_union_static": 252,
+        "once_only_union_static": 0,
+        "cfg_path_min": 192,
+        "cfg_path_max": 192,
+        "conservative_max_per_visit": 192.0
+      },
+      "f32_to_s32": {
+        "whole_static": 64,
+        "loop_union_static": 64,
+        "once_only_union_static": 0,
+        "cfg_path_min": 64,
+        "cfg_path_max": 64,
+        "conservative_max_per_visit": 64.0
+      },
+      "fp32_mul": {
+        "whole_static": 583,
+        "loop_union_static": 455,
+        "once_only_union_static": 128,
+        "cfg_path_min": 395,
+        "cfg_path_max": 395,
+        "conservative_max_per_visit": 395.11101474414573
+      },
+      "fp32_add": {
+        "whole_static": 144,
+        "loop_union_static": 144,
+        "once_only_union_static": 0,
+        "cfg_path_min": 144,
+        "cfg_path_max": 144,
+        "conservative_max_per_visit": 144.0
+      },
+      "fp32_fma": {
+        "whole_static": 132,
+        "loop_union_static": 132,
+        "once_only_union_static": 0,
+        "cfg_path_min": 132,
+        "cfg_path_max": 132,
+        "conservative_max_per_visit": 132.0
+      },
+      "qk_mma": {
+        "whole_static": 32,
+        "loop_union_static": 32,
+        "once_only_union_static": 0,
+        "cfg_path_min": 32,
+        "cfg_path_max": 32,
+        "conservative_max_per_visit": 32.0
+      },
+      "pv_mma": {
+        "whole_static": 32,
+        "loop_union_static": 32,
+        "once_only_union_static": 0,
+        "cfg_path_min": 32,
+        "cfg_path_max": 32,
+        "conservative_max_per_visit": 32.0
+      }
+    },
+    "loop_opcode_union": {
+      "s.add.i32": 5,
+      "s.add.i64": 4,
+      "s.and.b32": 11,
+      "s.blksyn.defer": 4,
+      "s.cbr": 4,
+      "s.cbr.az": 5,
+      "s.cbr.nz": 2,
+      "s.cmp.eq.i32": 1,
+      "s.cmp.gt.i32": 1,
+      "s.cmp.lt.i32": 1,
+      "s.lop.emsk": 2,
+      "s.mov.b32": 18,
+      "s.nop": 7,
+      "s.or.b32": 6,
+      "s.shrl.b32": 3,
+      "s.wait": 68,
+      "smem.ld.b32": 1,
+      "tsm.ld.swzl.b32x4.s0.t1.trans0": 40,
+      "v.add.ci.u32": 22,
+      "v.add.co.u32": 22,
+      "v.add.f32": 144,
+      "v.and.b32": 16,
+      "v.cmp.gt.i32": 64,
+      "v.cnvt.f32.i32.rtte": 252,
+      "v.cnvt.i32.f32.rtte": 64,
+      "v.cnvt.u32.u16": 16,
+      "v.cnvt.u32.u8": 16,
+      "v.csel.b32": 128,
+      "v.exp2.f32": 72,
+      "v.fma.f32.rtte": 132,
+      "v.lop3.b32": 32,
+      "v.madl.i32": 4,
+      "v.madw.u64.u32": 21,
+      "v.max.f32": 132,
+      "v.max.i32": 64,
+      "v.min.i32": 64,
+      "v.mma.i32.i8.i8.m16n16k32": 32,
+      "v.mma.i32.u8.i8.m16n16k32": 32,
+      "v.mov.b32": 197,
+      "v.mov.v2s": 4,
+      "v.mul.f32": 455,
+      "v.or.b32": 118,
+      "v.reg.dchk": 16,
+      "v.shll.b32": 96,
+      "v.shll.b64": 22,
+      "v.shrl.b32": 64,
+      "v.shuffle.bfly.b32": 16,
+      "v.shuffle.idx.b32": 64,
+      "v.ucmp.gt.f32": 64,
+      "vmem.acp.commit.grp": 2,
+      "vmem.aiu.ld.tsm.l0.t0.p0.s0.m0.2d.b8.kp1": 4,
+      "vmem.fence.blk": 1,
+      "vmem.ld.b32": 32
+    }
+  },
+  "after": {
+    "kernel": "_ZN13sageattention3ppu6detail17qk_int8_pv_kernelILi128ELb0ELb0EN7cutlass10bfloat16_tELb1EEEvPKaS6_PKNSt11conditionalIXT3_EaNS3_6half_tEE4typeEPT2_PfPKfSH_SH_iiiiiiiiiiiiiiiif",
+    "loop_header": "0x31d0",
+    "mask_then_only_proofs": 3,
+    "reachable_instructions": 3455,
+    "discarded": 21,
+    "groups": {
+      "all": {
+        "whole_static": 3455,
+        "loop_union_static": 2053,
+        "once_only_union_static": 1402,
+        "cfg_path_min": 1636,
+        "cfg_path_max": 1872,
+        "conservative_max_per_visit": 1873.2159583694709
+      },
+      "integer_bit_select": {
+        "whole_static": 663,
+        "loop_union_static": 298,
+        "once_only_union_static": 365,
+        "cfg_path_min": 93,
+        "cfg_path_max": 298,
+        "conservative_max_per_visit": 298.316565481353
+      },
+      "shuffle": {
+        "whole_static": 48,
+        "loop_union_static": 48,
+        "once_only_union_static": 0,
+        "cfg_path_min": 48,
+        "cfg_path_max": 48,
+        "conservative_max_per_visit": 48.0
+      },
+      "s32_to_f32": {
+        "whole_static": 252,
+        "loop_union_static": 252,
+        "once_only_union_static": 0,
+        "cfg_path_min": 192,
+        "cfg_path_max": 192,
+        "conservative_max_per_visit": 192.0
+      },
+      "f32_to_s32": {
+        "whole_static": 64,
+        "loop_union_static": 64,
+        "once_only_union_static": 0,
+        "cfg_path_min": 64,
+        "cfg_path_max": 64,
+        "conservative_max_per_visit": 64.0
+      },
+      "fp32_mul": {
+        "whole_static": 583,
+        "loop_union_static": 455,
+        "once_only_union_static": 128,
+        "cfg_path_min": 395,
+        "cfg_path_max": 395,
+        "conservative_max_per_visit": 395.11101474414573
+      },
+      "fp32_add": {
+        "whole_static": 144,
+        "loop_union_static": 144,
+        "once_only_union_static": 0,
+        "cfg_path_min": 144,
+        "cfg_path_max": 144,
+        "conservative_max_per_visit": 144.0
+      },
+      "fp32_fma": {
+        "whole_static": 132,
+        "loop_union_static": 132,
+        "once_only_union_static": 0,
+        "cfg_path_min": 132,
+        "cfg_path_max": 132,
+        "conservative_max_per_visit": 132.0
+      },
+      "qk_mma": {
+        "whole_static": 32,
+        "loop_union_static": 32,
+        "once_only_union_static": 0,
+        "cfg_path_min": 32,
+        "cfg_path_max": 32,
+        "conservative_max_per_visit": 32.0
+      },
+      "pv_mma": {
+        "whole_static": 32,
+        "loop_union_static": 32,
+        "once_only_union_static": 0,
+        "cfg_path_min": 32,
+        "cfg_path_max": 32,
+        "conservative_max_per_visit": 32.0
+      }
+    },
+    "loop_opcode_union": {
+      "s.add.i32": 5,
+      "s.add.i64": 2,
+      "s.and.b32": 11,
+      "s.blksyn.defer": 4,
+      "s.cbr": 4,
+      "s.cbr.az": 6,
+      "s.cbr.nz": 2,
+      "s.cmp.eq.i32": 1,
+      "s.cmp.gt.i32": 1,
+      "s.cmp.lt.i32": 1,
+      "s.lop.emsk": 3,
+      "s.mov.b32": 18,
+      "s.nop": 7,
+      "s.or.b32": 7,
+      "s.shrl.b32": 3,
+      "s.wait": 41,
+      "smem.ld.b32": 1,
+      "tsm.ld.b32": 32,
+      "tsm.ld.swzl.b32x4.s0.t1.trans0": 40,
+      "tsm.st.b32": 1,
+      "v.add.f32": 144,
+      "v.and.b32": 2,
+      "v.byte.prmt.b32": 32,
+      "v.cmp.gt.f32": 4,
+      "v.cmp.gt.i32": 64,
+      "v.cnvt.f32.i32.rtte": 252,
+      "v.cnvt.i32.f32.rtte": 64,
+      "v.csel.b32": 68,
+      "v.exp2.f32": 72,
+      "v.fma.f32.rtte": 132,
+      "v.madw.i64.i32": 1,
+      "v.max.f32": 136,
+      "v.mma.i32.i8.i8.m16n16k32": 32,
+      "v.mma.i32.u8.i8.m16n16k32": 32,
+      "v.mov.b32": 201,
+      "v.mov.v2s": 4,
+      "v.mul.f32": 455,
+      "v.or.b32": 68,
+      "v.pcnvt.b16.u8x2": 32,
+      "v.reg.dchk": 12,
+      "v.shuffle.bfly.b32": 48,
+      "vmem.acp.commit.grp": 2,
+      "vmem.aiu.ld.tsm.l0.t0.p0.s0.m0.2d.b8.kp1": 4,
+      "vmem.fence.blk": 1,
+      "vmem.ld.b32": 1
+    }
+  },
+  "old_acu_anchor": {
+    "instruction_and_operand_matches": 4046,
+    "nonexecuted_external_pcs": 5,
+    "groups": {
+      "all": {
+        "measured": 337494189592,
+        "measured_hot": 337338313984,
+        "measured_once_only": 155875608,
+        "measured_per_visit": 2264.7129397202084
+      },
+      "integer_bit_select": {
+        "measured": 84377979112,
+        "measured_hot": 84334223064,
+        "measured_once_only": 43756048,
+        "measured_per_visit": 566.2079733977072
+      },
+      "shuffle": {
+        "measured": 11921835520,
+        "measured_hot": 11921835520,
+        "measured_once_only": 0,
+        "measured_per_visit": 80.0
+      },
+      "s32_to_f32": {
+        "measured": 28612405248,
+        "measured_hot": 28612405248,
+        "measured_once_only": 0,
+        "measured_per_visit": 192.0
+      },
+      "f32_to_s32": {
+        "measured": 9537468416,
+        "measured_hot": 9537468416,
+        "measured_once_only": 0,
+        "measured_per_visit": 64.0
+      },
+      "fp32_mul": {
+        "measured": 58880588704,
+        "measured_hot": 58864062880,
+        "measured_once_only": 16525824,
+        "measured_per_visit": 395.1108944942062
+      },
+      "fp32_add": {
+        "measured": 21459303936,
+        "measured_hot": 21459303936,
+        "measured_once_only": 0,
+        "measured_per_visit": 144.0
+      },
+      "fp32_fma": {
+        "measured": 19671028608,
+        "measured_hot": 19671028608,
+        "measured_once_only": 0,
+        "measured_per_visit": 132.0
+      },
+      "qk_mma": {
+        "measured": 4768734208,
+        "measured_hot": 4768734208,
+        "measured_once_only": 0,
+        "measured_per_visit": 32.0
+      },
+      "pv_mma": {
+        "measured": 4768734208,
+        "measured_hot": 4768734208,
+        "measured_once_only": 0,
+        "measured_per_visit": 32.0
+      }
+    }
+  },
+  "measured_reference": {
+    "sass.json": {
+      "s32_to_f32_per_visit": 192.0,
+      "half_restore_add_per_visit": 0.0,
+      "mul_add_fma_half_restore_per_visit": 671.1108944942063,
+      "selected_arithmetic_opcodes": {
+        "v.add.f32": 21459303936,
+        "v.fma.f32.rtte": 19671028608,
+        "v.mul.f32": 58880588704
+      }
+    },
+    "h3-native-fp8-fp16-buffer-raw.csv": {
+      "s32_to_f32_per_visit": 64.0,
+      "half_restore_add_per_visit": 128.0,
+      "mul_add_fma_half_restore_per_visit": 395.33824804856897,
+      "selected_arithmetic_opcodes": {
+        "FADD.FTZ": 9538502400,
+        "FFMA.FTZ": 29804588800,
+        "FMUL.FTZ": 347677120,
+        "HADD2.F32": 19074936832,
+        "UFMUL.FTZ": 148764448
+      }
+    },
+    "h3-native-fp8-fp32-raw.csv": {
+      "s32_to_f32_per_visit": 64.0,
+      "half_restore_add_per_visit": 0.0,
+      "mul_add_fma_half_restore_per_visit": 267.33824804856897,
+      "selected_arithmetic_opcodes": {
+        "FADD.FTZ": 9538502400,
+        "FFMA.FTZ": 10729651968,
+        "FMUL.FTZ": 19422355456,
+        "UFMUL.FTZ": 149022944
+      }
+    }
+  }
+}

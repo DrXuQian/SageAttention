@@ -64,7 +64,7 @@ counts or predicted latency. The category definition remains fixed in
 | Complete-body count | Original post2 | Pack + butterfly | + row mask | + V staging |
 |---|---:|---:|---:|---:|
 | Integer / bit ALU | 1136 | 832 | 772 | 663 |
-| All instructions | 4083 | 3709 | 3592 | 3492 |
+| All reachable instructions | 4046 | 3672 | 3555 | 3455 |
 | Shuffles | 80 | 48 | 48 | 48 |
 | All explicit conversions | 485 | 453 | 453 | 448 |
 | FP32 multiplies | 583 | 583 | 583 | 583 |
@@ -73,6 +73,15 @@ counts or predicted latency. The category definition remains fixed in
 | Vector registers | 250 | 250 | 250 | 246 |
 | Scalar registers | — | 112 | 112 | 128 |
 | Private stack | 0 | 0 | 0 | 0 |
+
+Accounting correction, 2026-09-17: the old parser recognized `simt.exit`
+but not the shipping `s.exit`, and bounded a kernel at the next *kernel*
+section rather than the next ELF section. Each H3 total above previously
+included 20 unreachable NOPs, one dead branch, and 16 foreign `.text` NOPs.
+The corrected parser follows reachable branches (including targets after an
+early exit). Integer ALU and the 591-instruction A/B delta are unchanged.
+Archived `alu_20260917` JSON records retain their historical values; this
+table and `results/hot_account_20260917/account.json` supersede their totals.
 
 V staging replaces 32 per-channel global load sites with one cooperative
 load site plus 32 shared reads and one shared store. The complete body's
@@ -93,7 +102,7 @@ selection, not an assertion that the chosen geometry is faster on device.
 ## What remains different
 
 Compared with the published post2, the composed target removes 473 static
-integer/bit instructions (-41.64%) and 591 total instructions (-14.47%). It
+integer/bit instructions (-41.64%) and 591 total instructions (-14.61%). It
 does not establish NVIDIA instruction parity. PPU C/A byte ownership, U8
 packing instead of FP8 encoding, S32 restoration, and block-local V/P scales
 remain distinct. Changing scale granularity or exponent-based quantization is
@@ -112,3 +121,7 @@ gate, and optionally profiles H3 with `PROFILE=1`. It does not install a wheel,
 compile on the box, or change the user's FP16-PV default. Select the
 `qk_int8_pv_kernel<128,false,false,bfloat16_t,true>` report, not preparation
 kernels, for the before/after opcode comparison.
+
+The [remaining hot-loop account](PPU_INT8_REMAINING_GAP.md) separates the
+candidate's 663 whole-body integer instructions into 365 once-only and 298
+loop-union sites. Do not use 663 as an executed-per-iteration count.

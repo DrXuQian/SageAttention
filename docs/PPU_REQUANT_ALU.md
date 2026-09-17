@@ -44,12 +44,12 @@ Candidate DSO SHA256:
 H3 specialization: D128, noncausal, BF16 output, no LSE, INT8 PV. Its runtime
 shape is B1/H56/S73774; static ISA counts do **not** multiply by this shape.
 
-| Static count, complete kernel through exit | Before | After | Change |
+| Static count, reachable complete kernel | Before | After | Change |
 |---|---:|---:|---:|
 | Integer/bit ALU | 1136 | 832 | -304 (-26.76%) |
 | Shuffle | 80 | 48 | -32 (-40%); P part 64 -> 32 |
 | Conversions, all types | 485 | 453 | -32 byte-widening conversions |
-| All instructions | 4083 | 3709 | -374 (-9.16%) |
+| All instructions | 4046 | 3672 | -374 (-9.24%) |
 | FP32 multiplies | 583 | 583 | unchanged |
 | QK/PV MMA | 32 / 32 | 32 / 32 | unchanged |
 | CTA barriers | 5 | 5 | unchanged |
@@ -60,6 +60,10 @@ bit operations and byte permute/saturating pack; it excludes shuffle, moves,
 conversions, branches/waits and loads. `check_requant_codegen.py` defines it.
 Counts include prologue, tail/epilogue and static paths that may not execute;
 they are not the dynamic ACU opcode sums or latency predictions.
+
+The totals were corrected on 2026-09-17 to exclude 37 dead/foreign records
+per H3 body. See the parser erratum in `PPU_INT8_ALU_CLOSURE.md`; integer ALU,
+the before/after instruction delta, source and binaries did not change.
 
 Principal opcode deltas: `v.min.i32 -64`, `v.max.i32 -64`, `v.shll.b32 -97`,
 `v.shrl.b32 -64`, `v.or.b32 -35`, `v.lop3.b32 -32`, `v.and.b32 -16`;

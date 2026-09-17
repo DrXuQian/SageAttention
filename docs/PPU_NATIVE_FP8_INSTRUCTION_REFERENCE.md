@@ -116,6 +116,12 @@ The local optimized PPU static integer/bit count `1136 -> 832` is a different
 measurement (whole compiled body). It must not be subtracted from the measured
 dynamic 566.20 above or reported as a new PPU speedup.
 
+The follow-up [hot-loop account](PPU_INT8_REMAINING_GAP.md) anchors all old
+PCs and operands against ACU, separates cold/tail code, and identifies native
+deferred denominator reduction and FMA score formation. It also counts the
+complete PV restoration/scaling chain rather than treating common QK casts
+or native FP16-buffer restoration as unexplained integer-PV overhead.
+
 ## Reproduce the NVIDIA reference
 
 Use the unmodified upstream checkout and its built SM120 extension. The driver

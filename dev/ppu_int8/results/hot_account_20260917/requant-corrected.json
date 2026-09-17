@@ -1,0 +1,1334 @@
+{
+  "scope": "STATIC_ISA_ONLY; no new device result",
+  "probes": {
+    "requant_before": {
+      "summary": {
+        "static_instructions": 33,
+        "integer_bit_alu": 17,
+        "shuffles": 0,
+        "conversions": 4,
+        "float_multiply": 4,
+        "mma": 0,
+        "barriers": 0
+      },
+      "opcodes": {
+        "s.and.b32": 1,
+        "s.mull.i32": 1,
+        "s.wait": 1,
+        "simt.exit": 1,
+        "v.add.i32": 1,
+        "v.and.b32": 1,
+        "v.cnvt.i32.f32.rtte": 4,
+        "v.lop3.b32": 1,
+        "v.max.i32": 4,
+        "v.min.i32": 4,
+        "v.mov.alllane.b32": 2,
+        "v.mov.b32": 1,
+        "v.mul.f32": 4,
+        "v.or.b32": 1,
+        "v.shll.b32": 3,
+        "v.tid.init": 1,
+        "vmem.ld.b32x4": 1,
+        "vmem.st.b32": 1
+      }
+    },
+    "requant_after": {
+      "summary": {
+        "static_instructions": 22,
+        "integer_bit_alu": 6,
+        "shuffles": 0,
+        "conversions": 4,
+        "float_multiply": 4,
+        "mma": 0,
+        "barriers": 0
+      },
+      "opcodes": {
+        "s.and.b32": 1,
+        "s.mull.i32": 1,
+        "s.wait": 1,
+        "simt.exit": 1,
+        "v.add.i32": 1,
+        "v.and.b32": 1,
+        "v.cnvt.i32.f32.rtte": 4,
+        "v.mov.alllane.b32": 2,
+        "v.mov.b32": 1,
+        "v.mul.f32": 4,
+        "v.pcnvt.b16.u8x2": 2,
+        "v.tid.init": 1,
+        "vmem.ld.b32x4": 1,
+        "vmem.st.b32": 1
+      }
+    },
+    "transpose_before": {
+      "summary": {
+        "static_instructions": 83,
+        "integer_bit_alu": 50,
+        "shuffles": 16,
+        "conversions": 8,
+        "float_multiply": 0,
+        "mma": 0,
+        "barriers": 0
+      },
+      "opcodes": {
+        "s.and.b32": 1,
+        "s.mull.i32": 1,
+        "s.nop": 1,
+        "s.wait": 1,
+        "simt.exit": 1,
+        "v.add.i32": 1,
+        "v.and.b32": 7,
+        "v.cnvt.u32.u16": 4,
+        "v.cnvt.u32.u8": 4,
+        "v.lop3.b32": 4,
+        "v.mov.alllane.b32": 2,
+        "v.mov.b32": 1,
+        "v.or.b32": 7,
+        "v.shll.b32": 13,
+        "v.shrl.b32": 16,
+        "v.shuffle.idx.b32": 16,
+        "v.tid.init": 1,
+        "vmem.ld.b32x4": 1,
+        "vmem.st.b32x4": 1
+      }
+    },
+    "transpose_after": {
+      "summary": {
+        "static_instructions": 39,
+        "integer_bit_alu": 18,
+        "shuffles": 8,
+        "conversions": 0,
+        "float_multiply": 0,
+        "mma": 0,
+        "barriers": 0
+      },
+      "opcodes": {
+        "s.and.b32": 1,
+        "s.mull.i32": 1,
+        "s.nop": 1,
+        "s.wait": 1,
+        "simt.exit": 1,
+        "v.add.i32": 1,
+        "v.and.b32": 3,
+        "v.byte.prmt.b32": 8,
+        "v.cmp.eq.i32": 2,
+        "v.csel.b32": 2,
+        "v.mov.alllane.b32": 2,
+        "v.mov.b32": 5,
+        "v.shuffle.bfly.b32": 8,
+        "v.tid.init": 1,
+        "vmem.ld.b32x4": 1,
+        "vmem.st.b32x4": 1
+      }
+    }
+  },
+  "shipping": [
+    {
+      "specialization": [
+        "64",
+        "true",
+        "true",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2212,
+        "integer_bit_alu": 748,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2212,
+        "integer_bit_alu": 748,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "false",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2150,
+        "integer_bit_alu": 720,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2150,
+        "integer_bit_alu": 720,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "true",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2149,
+        "integer_bit_alu": 566,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2149,
+        "integer_bit_alu": 566,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "false",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2078,
+        "integer_bit_alu": 529,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2078,
+        "integer_bit_alu": 529,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "true",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2955,
+        "integer_bit_alu": 849,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2955,
+        "integer_bit_alu": 849,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "false",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2901,
+        "integer_bit_alu": 821,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2901,
+        "integer_bit_alu": 821,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2885,
+        "integer_bit_alu": 662,
+        "shuffles": 16,
+        "conversions": 256,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2885,
+        "integer_bit_alu": 662,
+        "shuffles": 16,
+        "conversions": 256,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "half_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2826,
+        "integer_bit_alu": 625,
+        "shuffles": 16,
+        "conversions": 246,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2826,
+        "integer_bit_alu": 625,
+        "shuffles": 16,
+        "conversions": 246,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "true",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2212,
+        "integer_bit_alu": 748,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2212,
+        "integer_bit_alu": 748,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "false",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2150,
+        "integer_bit_alu": 720,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2150,
+        "integer_bit_alu": 720,
+        "shuffles": 16,
+        "conversions": 136,
+        "float_multiply": 195,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "true",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2149,
+        "integer_bit_alu": 566,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2149,
+        "integer_bit_alu": 566,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "false",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2078,
+        "integer_bit_alu": 529,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2078,
+        "integer_bit_alu": 529,
+        "shuffles": 16,
+        "conversions": 192,
+        "float_multiply": 255,
+        "mma": 56,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "true",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2955,
+        "integer_bit_alu": 849,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2955,
+        "integer_bit_alu": 849,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "false",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2901,
+        "integer_bit_alu": 821,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2901,
+        "integer_bit_alu": 821,
+        "shuffles": 16,
+        "conversions": 200,
+        "float_multiply": 323,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2885,
+        "integer_bit_alu": 662,
+        "shuffles": 16,
+        "conversions": 256,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2885,
+        "integer_bit_alu": 662,
+        "shuffles": 16,
+        "conversions": 256,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "bfloat16_t",
+        "false"
+      ],
+      "before": {
+        "static_instructions": 2826,
+        "integer_bit_alu": 625,
+        "shuffles": 16,
+        "conversions": 246,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2826,
+        "integer_bit_alu": 625,
+        "shuffles": 16,
+        "conversions": 246,
+        "float_multiply": 383,
+        "mma": 104,
+        "barriers": 5
+      },
+      "opcode_delta": {}
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "true",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3135,
+        "integer_bit_alu": 1207,
+        "shuffles": 80,
+        "conversions": 298,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2774,
+        "integer_bit_alu": 903,
+        "shuffles": 48,
+        "conversions": 266,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 4,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "false",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3077,
+        "integer_bit_alu": 1179,
+        "shuffles": 80,
+        "conversions": 298,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2712,
+        "integer_bit_alu": 875,
+        "shuffles": 48,
+        "conversions": 266,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "true",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3082,
+        "integer_bit_alu": 975,
+        "shuffles": 80,
+        "conversions": 366,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2701,
+        "integer_bit_alu": 671,
+        "shuffles": 48,
+        "conversions": 334,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": 4,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": -25,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 9,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "false",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3014,
+        "integer_bit_alu": 938,
+        "shuffles": 80,
+        "conversions": 366,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2623,
+        "integer_bit_alu": 634,
+        "shuffles": 48,
+        "conversions": 334,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -3,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": 8,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": -30,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "true",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4119,
+        "integer_bit_alu": 1374,
+        "shuffles": 80,
+        "conversions": 426,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3772,
+        "integer_bit_alu": 1070,
+        "shuffles": 48,
+        "conversions": 394,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 8,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 5,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 8,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "false",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4061,
+        "integer_bit_alu": 1346,
+        "shuffles": 80,
+        "conversions": 426,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3714,
+        "integer_bit_alu": 1042,
+        "shuffles": 48,
+        "conversions": 394,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 8,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 6,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 7,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4112,
+        "integer_bit_alu": 1173,
+        "shuffles": 80,
+        "conversions": 485,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3742,
+        "integer_bit_alu": 869,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -4,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 17,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": -15,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "half_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4046,
+        "integer_bit_alu": 1136,
+        "shuffles": 80,
+        "conversions": 485,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3672,
+        "integer_bit_alu": 832,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -5,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": -4,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 17,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": -14,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "true",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3135,
+        "integer_bit_alu": 1207,
+        "shuffles": 80,
+        "conversions": 298,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2774,
+        "integer_bit_alu": 903,
+        "shuffles": 48,
+        "conversions": 266,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 4,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "true",
+        "false",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3077,
+        "integer_bit_alu": 1179,
+        "shuffles": 80,
+        "conversions": 298,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2712,
+        "integer_bit_alu": 875,
+        "shuffles": 48,
+        "conversions": 266,
+        "float_multiply": 331,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "true",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3082,
+        "integer_bit_alu": 975,
+        "shuffles": 80,
+        "conversions": 366,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2701,
+        "integer_bit_alu": 671,
+        "shuffles": 48,
+        "conversions": 334,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -1,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": 4,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": -25,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 9,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "64",
+        "false",
+        "false",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 3014,
+        "integer_bit_alu": 938,
+        "shuffles": 80,
+        "conversions": 366,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 2623,
+        "integer_bit_alu": 634,
+        "shuffles": 48,
+        "conversions": 334,
+        "float_multiply": 391,
+        "mma": 32,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -3,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": 8,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": -30,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "true",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4119,
+        "integer_bit_alu": 1374,
+        "shuffles": 80,
+        "conversions": 426,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3772,
+        "integer_bit_alu": 1070,
+        "shuffles": 48,
+        "conversions": 394,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 8,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 5,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 8,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "true",
+        "false",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4061,
+        "integer_bit_alu": 1346,
+        "shuffles": 80,
+        "conversions": 426,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3714,
+        "integer_bit_alu": 1042,
+        "shuffles": 48,
+        "conversions": 394,
+        "float_multiply": 523,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": 8,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 6,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": 7,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4112,
+        "integer_bit_alu": 1173,
+        "shuffles": 80,
+        "conversions": 485,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3742,
+        "integer_bit_alu": 869,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -4,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 17,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": -15,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "bfloat16_t",
+        "true"
+      ],
+      "before": {
+        "static_instructions": 4046,
+        "integer_bit_alu": 1136,
+        "shuffles": 80,
+        "conversions": 485,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3672,
+        "integer_bit_alu": 832,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "opcode_delta": {
+        "s.wait": -5,
+        "v.and.b32": -16,
+        "v.byte.prmt.b32": 32,
+        "v.cmp.eq.i32": 2,
+        "v.cnvt.u32.u16": -16,
+        "v.cnvt.u32.u8": -16,
+        "v.csel.b32": 2,
+        "v.lop3.b32": -32,
+        "v.max.f32": -4,
+        "v.max.i32": -64,
+        "v.min.i32": -64,
+        "v.mov.b32": 17,
+        "v.or.b32": -35,
+        "v.pcnvt.b16.u8x2": 32,
+        "v.reg.dchk": -14,
+        "v.shll.b32": -97,
+        "v.shrl.b32": -64,
+        "v.shuffle.bfly.b32": 32,
+        "v.shuffle.idx.b32": -64
+      }
+    }
+  ],
+  "isa_sha256": {
+    "before": "437b453d37f038520b70cf1f0e179e551230232b3ec5fcc3124f97586544ef2d",
+    "after": "f47507672c7aa63c39a15e43bb2e6762f33a4e12a7e652fa6ed2d61052786c2a"
+  }
+}

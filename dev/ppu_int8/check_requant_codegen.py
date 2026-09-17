@@ -7,25 +7,12 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from native_isa import parse_native
 
 
 def sections(text):
-    matches = list(re.finditer(r"Disassembly of section \.text\.kernel\.([^:\n]+):", text))
-    result = {}
-    for i, match in enumerate(matches):
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        body = text[match.end():end]
-        lines = []
-        for line in body.splitlines():
-            instruction = re.match(r"\s*[0-9a-f]+:\s+(?:[0-9a-f]{2}\s+){8}\s*(\S+)(.*)", line)
-            if instruction:
-                lines.append((instruction[1], instruction[2].strip()))
-                if instruction[1] == "simt.exit":
-                    break  # Exclude the unreachable tail/padding, not live nops.
-        if match[1] in result or not lines:
-            raise ValueError(f"duplicate or empty native body: {match[1]}")
-        result[match[1]] = lines
-    return result
+    return {name: [(row.opcode, row.operands) for row in kernel.instructions.values()]
+            for name, kernel in parse_native(text).items()}
 
 
 def counters(lines):

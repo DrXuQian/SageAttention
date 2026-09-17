@@ -1,0 +1,267 @@
+{
+  "scope": "STATIC_NATIVE_ISA_ONLY; PPU candidate NOT RUN",
+  "specializations": [
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "half_t"
+      ],
+      "before": {
+        "static_instructions": 3621,
+        "integer_bit_alu": 809,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3520,
+        "integer_bit_alu": 700,
+        "shuffles": 48,
+        "conversions": 448,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "resources_before": {
+        "vector_registers": 250,
+        "scalar_registers": 112,
+        "private_stack": 0
+      },
+      "resources_after": {
+        "vector_registers": 244,
+        "scalar_registers": 128,
+        "private_stack": 0
+      },
+      "shared_bytes_added": 512,
+      "opcode_delta": {
+        "s.add.i64": -3,
+        "s.cbr.az": 1,
+        "s.lop.emsk": 1,
+        "s.mov.b32": 29,
+        "s.or.b32": 1,
+        "s.shll.b64": -1,
+        "s.wait": -21,
+        "tsm.ld.b32": 32,
+        "tsm.st.b32": 1,
+        "v.add.ci.u32": -21,
+        "v.add.co.u32": -21,
+        "v.add.i32": 1,
+        "v.and.b32": 2,
+        "v.cmp.lt.i32": 1,
+        "v.cnvt.u64.u32": -5,
+        "v.madl.i32": -2,
+        "v.madw.i64.i32": 1,
+        "v.madw.u64.u32": -20,
+        "v.max.f32": 8,
+        "v.mov.b32": -9,
+        "v.or.b32": -22,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -4,
+        "v.shll.b64": -21,
+        "vmem.ld.b32": -31
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "half_t"
+      ],
+      "before": {
+        "static_instructions": 3555,
+        "integer_bit_alu": 772,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3455,
+        "integer_bit_alu": 663,
+        "shuffles": 48,
+        "conversions": 448,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "resources_before": {
+        "vector_registers": 250,
+        "scalar_registers": 112,
+        "private_stack": 0
+      },
+      "resources_after": {
+        "vector_registers": 246,
+        "scalar_registers": 128,
+        "private_stack": 0
+      },
+      "shared_bytes_added": 512,
+      "opcode_delta": {
+        "s.add.i64": -3,
+        "s.cbr.az": 1,
+        "s.lop.emsk": 1,
+        "s.mov.b32": 21,
+        "s.or.b32": 1,
+        "s.shll.b64": -1,
+        "s.wait": -21,
+        "tsm.ld.b32": 32,
+        "tsm.st.b32": 1,
+        "v.add.ci.u32": -21,
+        "v.add.co.u32": -21,
+        "v.add.i32": 1,
+        "v.and.b32": 2,
+        "v.cmp.lt.i32": 1,
+        "v.cnvt.u64.u32": -5,
+        "v.madl.i32": -2,
+        "v.madw.i64.i32": 1,
+        "v.madw.u64.u32": -20,
+        "v.max.f32": 8,
+        "v.mov.b32": -4,
+        "v.or.b32": -22,
+        "v.reg.dchk": 6,
+        "v.shll.b32": -4,
+        "v.shll.b64": -21,
+        "vmem.ld.b32": -31
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "true",
+        "bfloat16_t"
+      ],
+      "before": {
+        "static_instructions": 3621,
+        "integer_bit_alu": 809,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3520,
+        "integer_bit_alu": 700,
+        "shuffles": 48,
+        "conversions": 448,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "resources_before": {
+        "vector_registers": 250,
+        "scalar_registers": 112,
+        "private_stack": 0
+      },
+      "resources_after": {
+        "vector_registers": 244,
+        "scalar_registers": 128,
+        "private_stack": 0
+      },
+      "shared_bytes_added": 512,
+      "opcode_delta": {
+        "s.add.i64": -3,
+        "s.cbr.az": 1,
+        "s.lop.emsk": 1,
+        "s.mov.b32": 29,
+        "s.or.b32": 1,
+        "s.shll.b64": -1,
+        "s.wait": -21,
+        "tsm.ld.b32": 32,
+        "tsm.st.b32": 1,
+        "v.add.ci.u32": -21,
+        "v.add.co.u32": -21,
+        "v.add.i32": 1,
+        "v.and.b32": 2,
+        "v.cmp.lt.i32": 1,
+        "v.cnvt.u64.u32": -5,
+        "v.madl.i32": -2,
+        "v.madw.i64.i32": 1,
+        "v.madw.u64.u32": -20,
+        "v.max.f32": 8,
+        "v.mov.b32": -9,
+        "v.or.b32": -22,
+        "v.reg.dchk": 2,
+        "v.shll.b32": -4,
+        "v.shll.b64": -21,
+        "vmem.ld.b32": -31
+      }
+    },
+    {
+      "specialization": [
+        "128",
+        "false",
+        "false",
+        "bfloat16_t"
+      ],
+      "before": {
+        "static_instructions": 3555,
+        "integer_bit_alu": 772,
+        "shuffles": 48,
+        "conversions": 453,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "after": {
+        "static_instructions": 3455,
+        "integer_bit_alu": 663,
+        "shuffles": 48,
+        "conversions": 448,
+        "float_multiply": 583,
+        "mma": 64,
+        "barriers": 5
+      },
+      "resources_before": {
+        "vector_registers": 250,
+        "scalar_registers": 112,
+        "private_stack": 0
+      },
+      "resources_after": {
+        "vector_registers": 246,
+        "scalar_registers": 128,
+        "private_stack": 0
+      },
+      "shared_bytes_added": 512,
+      "opcode_delta": {
+        "s.add.i64": -3,
+        "s.cbr.az": 1,
+        "s.lop.emsk": 1,
+        "s.mov.b32": 21,
+        "s.or.b32": 1,
+        "s.shll.b64": -1,
+        "s.wait": -21,
+        "tsm.ld.b32": 32,
+        "tsm.st.b32": 1,
+        "v.add.ci.u32": -21,
+        "v.add.co.u32": -21,
+        "v.add.i32": 1,
+        "v.and.b32": 2,
+        "v.cmp.lt.i32": 1,
+        "v.cnvt.u64.u32": -5,
+        "v.madl.i32": -2,
+        "v.madw.i64.i32": 1,
+        "v.madw.u64.u32": -20,
+        "v.max.f32": 8,
+        "v.mov.b32": -4,
+        "v.or.b32": -22,
+        "v.reg.dchk": 6,
+        "v.shll.b32": -4,
+        "v.shll.b64": -21,
+        "vmem.ld.b32": -31
+      }
+    }
+  ],
+  "evidence_sha256": {
+    "before": "b214fa7ace79308bf40d6e7879263d58ac10958c2ba522222ed424b4ae6870dd",
+    "after": "b32d11259bc45065ba662d8092ffeaf36ea402ea4b99d1282627ea1a4520b89d",
+    "before_resources": "3349af7e06967cae40eeeefc9f7cb7d34daa3ad3047526c4b7058754a72d0953",
+    "after_resources": "6ccd9acc16a8fd4aacfeb1e906643830b2a3b984229feb6411c88547b6438c92"
+  }
+}
