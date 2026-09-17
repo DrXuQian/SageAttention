@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 08:36:54 UTC
-- working-on: local hot-loop investigation complete; publishing PC-anchored accounting and two rounding counterexamples, no production change
+- updated-at: 2026-09-17 08:39:09 UTC
+- working-on: hot-loop report committed; handoff of PC-anchored account and rounding witnesses, no production change
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: unchanged P multiply/RNE/clamp, local P scale, V block/channel scale, FP32 softmax and accumulation order
 - blocked-on: fresh PPU candidate numeric/latency/ACU execution; no PPU speedup or NVIDIA parity claimed
-- last-commit: 97ea065672d3dd5e69c3f568590d9c149bb2c00e (reporting work in progress; immutable candidate source remains a49338f)
+- last-commit: d8082cd8ba2e44f3acfa7f35b64e4986b545f600 (completed report/code checkpoint; excludes this STATUS-only follow-up; immutable candidate source remains a49338f)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
