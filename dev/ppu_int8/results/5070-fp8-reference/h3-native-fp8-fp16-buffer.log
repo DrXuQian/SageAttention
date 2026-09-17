@@ -1,0 +1,13 @@
+[native Sage plan] {"B": 1, "H": 56, "S": 73774, "D": 128, "input": "bf16", "output": "bf16", "layout": "NHD", "causal": false, "qk": "S8-S8-S32", "pv": "E4M3-E4M3", "pv_accum_mode": "fp32+fp16", "qk_quant_gran": "per_warp", "smooth_k": false, "smooth_v": false, "seed": 23150, "warmup": 1, "profile_launches": 1, "nvtx_range": "sage_native_profile", "preparation": "outside NVTX range", "comparison": "same shape; prior PPU inputs not recovered, no byte-identical-input claim"}
+/home/qianxu/miniconda3/lib/python3.12/site-packages/torch/cuda/__init__.py:61: FutureWarning: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, please report this to the maintainers of the package that installed pynvml for you.
+  import pynvml  # type: ignore[import]
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 670 (/home/qianxu/miniconda3/bin/python3.12)
+[native Sage identity] {"source_sha": "d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5", "package": {"path": "/home/qianxu/workspace/sage-native-ncu-20260917/upstream/sageattention/__init__.py", "sha256": "9b178247cd22cc2c00114f445ee711c229745193ecda98d397a051e6f889326a"}, "native": {"path": "/home/qianxu/workspace/sage-native-ncu-20260917/upstream/sageattention/_qattn_sm89.cpython-312-x86_64-linux-gnu.so", "sha256": "6f43b7052afc68c21c95907c1faf46691cf5a0c47ee99e50f5adec8304a54d56"}, "selected": "qk_int8_sv_f8_accum_f16_fuse_v_scale_attn_inst_buf", "device": "NVIDIA GeForce RTX 5070", "capability": [12, 0], "torch": "2.11.0+cu128", "cuda": "12.8", "memory_free_total": [11512315904, 12820480000]}
+==PROF== Profiling "qk_int_sv_f8_attn_kernel" - 0: 0%.
+==WARNING== Backing up device memory in system memory. Kernel replay might be slow. Consider using "--replay-mode application" to avoid memory save-and-restore.
+...50%....100% - 2 passes
+[native Sage complete] {"sampled_output_sha256": "7f26513b9dd305d26a833b91a05cd9b345f6ec86555bc77a816f46441ce10449", "scope": "profile-only, not a new full numerical admission"}
+==PROF== Disconnected from process 670
+==PROF== Report: /home/qianxu/workspace/sage-native-ncu-20260917/ncu-fp8-reference/h3-native-fp8-fp16-buffer.ncu-rep
