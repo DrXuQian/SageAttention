@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "artifact": "_qattn_ppu.cpython-312-x86_64-linux-gnu.so",
+  "artifact_sha256": "dc50962536e79bf8ec636ece3c0d2a5070d8a416ae05d82270f11c0aee6e126c",
+  "artifact_size": 1436704,
+  "build": {
+    "source_git_commit": "a49338f8c86e5ec7a4c05eb9543b5e35af6f7e26",
+    "actlize_git_commit": "9d063e4c5fde5119d4d68bfbe124aacd8ed2ec88",
+    "ppu_arch": "ppu_10",
+    "compiler_identity": "hgcc(HGGC C/C++ Compiler)\nRelease version 2.1.1-a5c56e\nBuilt on Jul 25 2026 at 09:15:42\n",
+    "python_cache_tag": "cpython-312",
+    "torch_public_version": "2.9.0",
+    "torch_build_version": "2.9.0+cu128",
+    "cxx11_abi": true
+  },
+  "resource_evidence": {
+    "specializations": 48,
+    "max_vector_registers": 256,
+    "nonzero_private_frames": [],
+    "scope": "local hgobjdump; no device run"
+  },
+  "attention_pv_modes": [
+    "fp16",
+    "int8"
+  ],
+  "all_int8_device_admission": "NOT RUN; execute dev/ppu_int8/device_all_int8.py before timing",
+  "required_ppu_runtime_libraries": [
+    "libhggcrt.13.0.so",
+    "libhggc.so",
+    "libalippu.so"
+  ],
+  "native_runtime_linkage": {
+    "soname": "libhggcrt.13.0.so",
+    "elf_needed": [
+      "libc10.so",
+      "libtorch_cpu.so",
+      "libtorch_python.so",
+      "libhggcrt.13.0.so",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-x86-64.so.2"
+    ],
+    "unbound_native_entries": [],
+    "binding": "hidden --wrap entries with handle-scoped native lookup",
+    "symbols": [
+      "__hggcPushCallConfiguration",
+      "__hggcPopCallConfiguration",
+      "__hggcRegisterFatBinary",
+      "__hggcUnregisterFatBinary",
+      "__hggcRegisterFunction",
+      "__hggcRegisterVar",
+      "hggcFuncSetAttribute",
+      "hggcGetErrorString",
+      "hggcGetLastError",
+      "hggcLaunchKernel"
+    ]
+  },
+  "source_sha256": {
+    "setup_ppu.py": "b78bc654a1cf725141daa280e0cbc4bb2d77f22d7a9af3f0aba6e0b77bdc095a",
+    "tools/ppu_native_link.py": "3927c5ac0b0aad720959ebf56b7f73a9c6185bc54b31e0e26e023f8e0cf8afd2",
+    "csrc/qattn/ppu/attn_ppu.h": "cdd69106b0d0f554395486480252846a012d05808290bb9ab4d9ffc5d8e04b08",
+    "csrc/qattn/ppu/attn_ppu_int8_layout.cuh": "5b2f864d437a40f1cc8b2e85afdc121f99997e29b49a484cbc6f3416473aaf75",
+    "csrc/qattn/ppu/attn_ppu_layout.cuh": "07388b773e79055b0b8f94e85e76b3745a3844dd533c89521fcb4acfb51484b5",
+    "csrc/qattn/ppu/attn_ppu_ops.cuh": "ff2f034bcd339b8426058430fbe5c9ee0d0f9d6914984d0ee1ced32c58135aa8",
+    "csrc/qattn/ppu/attn_ppu_probability.cuh": "363016dd778518e2795e922d1c3b56934eef83794f0783ef04cf493b147d83ae",
+    "csrc/qattn/ppu/attn_ppu_value_scale.cuh": "2e934b5964d0f39339ecc8c5d5910353e5430541167f9d8466de8fdb2ef577e2",
+    "csrc/qattn/ppu/native_runtime.cpp": "66a560841b42f61d49aeb2e4358dfd495e6070c461b37cddae3ff2a5610b4f9a",
+    "csrc/qattn/ppu/pybind_ppu.cpp": "0f72efa9e5cf869da22bef2c898464d0dfd23267f549fc300bbb988a9eccfa5b",
+    "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu": "bc5e9d183a89313fd84fe9dd05c6a06bcf49f2bb31994b5c0a2225c4cc19b274",
+    "csrc/qattn/ppu/quant_ppu.cu": "bab993a659d923415d33327b6a8c4bf7308c0ab3979616f54f92b5c2c5369464"
+  }
+}

@@ -18,6 +18,16 @@ python "$repo/tools/stage_ppu_candidate.py" --repo "$repo" \
 export PYTHONPATH="$out/python"
 export LD_LIBRARY_PATH="$runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 cd /workspace
+python - "$out/python" <<'PY'
+from pathlib import Path
+import sys
+from sageattention import ppu_compile
+actual = Path(ppu_compile._qattn_ppu.__file__).resolve()
+expected = (Path(sys.argv[1]) / "sageattention").resolve()
+if actual.parent != expected:
+    raise RuntimeError(f"staged candidate was shadowed: {actual}; expected {expected}")
+print(f"[PPU ALU candidate] loaded={actual}")
+PY
 python "$repo/dev/ppu_int8/device_all_int8.py" 2>&1 | tee "$out/correctness.log"
 if [[ "${PROFILE:-0}" == 1 ]]; then
   "${ACU:-/sim/eec/shared/junfu.qx/asight/bin/acu}" -f \

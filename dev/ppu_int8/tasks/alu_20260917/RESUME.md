@@ -18,5 +18,11 @@ PPU SDK: `/root/ppu-sdk/2.1.1`, Torch 2.9 build Python:
 `/root/autodl-tmp/sageattention-build-envs/torch29/bin/python`.
 Build/test output root: `/workspace/sage-int8-alu-closure-20260917` (mkdir).
 No PPU GPU job or new timing is running.
-Next: source checkpoint, fresh clean-SHA full SDK build and an explicit
-experimental prebuilt handoff. Do not replace the default FP16 wheel.
+Final clean source a49338f was rebuilt: native streams identical 48/48,
+all codegen/negative gates pass and all private stacks are zero. The dedicated
+prebuilt is under `prebuilt/ppu_10/alu-candidate`, DSO sha256
+`dc50962536e79bf8ec636ece3c0d2a5070d8a416ae05d82270f11c0aee6e126c`.
+Isolated package import and native runtime/CPU-rejection tests passed. Runner:
+`PROFILE=1 bash tools/run_ppu_int8_alu_candidate_box.sh` from this experiment
+branch. It does not install or overwrite the default FP16 wheel. Next evidence
+must be device numeric/latency/ACU; this local pass is not performance admission.
