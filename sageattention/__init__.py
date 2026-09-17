@@ -4,4 +4,3 @@ from .core import sageattn_qk_int8_pv_fp16_cuda
 from .core import sageattn_qk_int8_pv_fp8_cuda
 from .core import sageattn_qk_int8_pv_fp8_cuda_sm90
 from .core import sageattn_qk_int8_pv_fp16_ppu
-from .core import sageattn_qk_int8_pv_int8_ppu

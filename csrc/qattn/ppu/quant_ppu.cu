@@ -7,50 +7,9 @@
 #include <hggc_runtime.h>
 
 #include <cutlass/numeric_types.h>
-#include "attn_ppu_int8_layout.cuh"
-#include "attn_ppu_key_layout.cuh"
 
 namespace sageattention::ppu {
 namespace detail {
-
-template <typename Input, int HeadDim>
-__global__ void quantize_value_int8_kernel(
-    Input const *__restrict__ input, int8_t *__restrict__ output,
-    float *__restrict__ scale, int tokens, int heads, int blocks,
-    int64_t batch_stride, int64_t token_stride, int64_t head_stride) {
-  int const block = int(blockIdx.x), head = int(blockIdx.y), batch = int(blockIdx.z);
-  int const column = int(threadIdx.x);
-  int64_t const group = (int64_t(batch) * heads + head) * blocks + block;
-  // Padding breaks the bank-aligned byte-column stride in the transposed read.
-  __shared__ int8_t tile[64][HeadDim + 4];
-  if (column < HeadDim) {
-    float maximum = 1.0e-7f;
-    for (int row = 0; row < 64; ++row) {
-      int const token = block * 64 + row;
-      if (token < tokens) {
-        float const x = float(input[int64_t(batch) * batch_stride +
-            int64_t(head) * head_stride + int64_t(token) * token_stride + column]);
-        maximum = fmaxf(maximum, fabsf(x));
-      }
-    }
-    scale[group * HeadDim + column] = maximum / 127.0f;
-    float const multiplier = 127.0f / maximum;
-    for (int row = 0; row < 64; ++row) {
-      int const token = block * 64 + row;
-      float x = 0.0f;
-      if (token < tokens) {
-        x = float(input[int64_t(batch) * batch_stride +
-            int64_t(head) * head_stride + int64_t(token) * token_stride + column]);
-      }
-      tile[row][column] = int8_t(max(-127, min(127, __float2int_rn(x * multiplier))));
-    }
-  }
-  __syncthreads();
-  for (int i = int(threadIdx.x); i < HeadDim * 64; i += int(blockDim.x)) {
-    int const d = i / 64, k = i % 64;
-    output[group * HeadDim * 64 + layout::packed_value_offset(d, k)] = tile[k][d];
-  }
-}
 
 template <typename T>
 __device__ __forceinline__ float to_float(T value) {
@@ -76,7 +35,7 @@ __device__ __forceinline__ float block_max(float value) {
   return warp_max(value);
 }
 
-template <typename Input, int HeadDim, int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
+template <typename Input, int HeadDim, int Rows, bool SubtractMean>
 __global__ void quantize_int8_kernel(
     Input const *__restrict__ input,
     Input const *__restrict__ mean,
@@ -91,7 +50,6 @@ __global__ void quantize_int8_kernel(
   int const batch = int(blockIdx.z);
   int const row0 = logical_block * Rows;
   int const elements = Rows * HeadDim;
-  static_assert(!KeyRowsPermuted || Rows == 64, "only K64 key blocks may be permuted");
 
   float local_max = 1.0e-7f;
   for (int linear = int(threadIdx.x); linear < elements;
@@ -136,16 +94,15 @@ __global__ void quantize_int8_kernel(
       }
       int const quantized = max(-127, min(127,
           __float2int_rn(value * multiplier)));
-      int const output_row = KeyRowsPermuted ? layout::key_storage_row(row, tokens) : row;
       output[int64_t(batch) * stride_bz_output
-             + int64_t(output_row) * stride_seq_output
+             + int64_t(row) * stride_seq_output
              + int64_t(head) * stride_h_output + column] =
           static_cast<int8_t>(quantized);
     }
   }
 }
 
-template <typename Input, int HeadDim, int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
+template <typename Input, int HeadDim, int Rows, bool SubtractMean>
 void launch_quant(
     torch::Tensor const &input, torch::Tensor const &mean,
     torch::Tensor const &output, torch::Tensor const &scale,
@@ -155,7 +112,7 @@ void launch_quant(
     int stride_bz_mean, int stride_h_mean) {
   dim3 const grid(logical_blocks, heads, input.size(0));
   int constexpr threads = 128;
-  quantize_int8_kernel<Input, HeadDim, Rows, SubtractMean, KeyRowsPermuted>
+  quantize_int8_kernel<Input, HeadDim, Rows, SubtractMean>
       <<<grid, threads>>>(
           reinterpret_cast<Input const *>(input.data_ptr()),
           SubtractMean ? reinterpret_cast<Input const *>(mean.data_ptr()) : nullptr,
@@ -206,7 +163,7 @@ void validate_quant_tensors(
   }
 }
 
-template <int Rows, bool SubtractMean, bool KeyRowsPermuted = false>
+template <int Rows, bool SubtractMean>
 void dispatch_quant(
     torch::Tensor const &input, torch::Tensor const &mean,
     torch::Tensor const &output, torch::Tensor const &scale,
@@ -223,7 +180,7 @@ void dispatch_quant(
 
 #define SAGEATTN_PPU_QUANT(INPUT_TYPE, HEAD_DIM)                              \
   sageattention::ppu::detail::launch_quant<                                  \
-      INPUT_TYPE, HEAD_DIM, Rows, SubtractMean, KeyRowsPermuted>(            \
+      INPUT_TYPE, HEAD_DIM, Rows, SubtractMean>(                             \
       input, mean, output, scale, tokens, heads, logical_blocks,             \
       stride_seq_input, stride_h_input, stride_seq_output, stride_h_output,  \
       stride_bz_mean, stride_h_mean)
@@ -261,8 +218,7 @@ void quant_per_warp_int8_ppu(
                             tensor_layout, blocks);
 }
 
-template <bool KeyRowsPermuted>
-void quant_per_block_int8_impl(
+void quant_per_block_int8_ppu(
     torch::Tensor input, torch::Tensor mean, torch::Tensor output,
     torch::Tensor scale, int block_size, int tensor_layout) {
   bool const subtract_mean = mean.defined() && mean.numel() != 0;
@@ -285,61 +241,10 @@ void quant_per_block_int8_impl(
     TORCH_CHECK(mean.size(0) == input.size(0) && mean.size(1) == heads &&
                     mean.size(2) == head_dim,
                 "PPU K mean shape mismatch");
-    dispatch_quant<64, true, KeyRowsPermuted>(input, mean, output, scale,
+    dispatch_quant<64, true>(input, mean, output, scale,
                              tensor_layout, blocks);
   } else {
-    dispatch_quant<64, false, KeyRowsPermuted>(input, torch::Tensor{}, output, scale,
+    dispatch_quant<64, false>(input, torch::Tensor{}, output, scale,
                               tensor_layout, blocks);
   }
-}
-
-void quant_per_block_int8_ppu(torch::Tensor input, torch::Tensor mean,
-    torch::Tensor output, torch::Tensor scale, int block_size, int tensor_layout) {
-  quant_per_block_int8_impl<false>(input, mean, output, scale, block_size, tensor_layout);
-}
-
-void quant_per_block_int8_permuted_k_ppu(torch::Tensor input, torch::Tensor mean,
-    torch::Tensor output, torch::Tensor scale, int block_size, int tensor_layout) {
-  quant_per_block_int8_impl<true>(input, mean, output, scale, block_size, tensor_layout);
-}
-
-void quant_value_int8_ppu(torch::Tensor input, torch::Tensor output,
-                         torch::Tensor scale, int tensor_layout) {
-  TORCH_CHECK(tensor_layout == 0 || tensor_layout == 1, "V layout must be NHD/HND");
-  TORCH_CHECK(input.is_cuda() && output.is_cuda() && scale.is_cuda() &&
-                  input.get_device() == output.get_device() && input.get_device() == scale.get_device(),
-              "V quantization requires tensors on the same device");
-  TORCH_CHECK((input.scalar_type() == torch::kHalf || input.scalar_type() == torch::kBFloat16) &&
-                  output.scalar_type() == torch::kInt8 && scale.scalar_type() == torch::kFloat32,
-              "V quantization requires FP16/BF16 input and INT8/FP32 outputs");
-  TORCH_CHECK(input.dim() == 4 && output.dim() == 5 && scale.dim() == 4 &&
-                  input.stride(3) == 1 && output.is_contiguous() && scale.is_contiguous(),
-              "V quantization rank/stride contract violated");
-  int const seq_dim = tensor_layout == 0 ? 1 : 2;
-  int const head_dim = tensor_layout == 0 ? 2 : 1;
-  int const d = int(input.size(3)), n = int(input.size(seq_dim));
-  int const heads = int(input.size(head_dim)), blocks = (n + 63) / 64;
-  TORCH_CHECK((d == 64 || d == 128) && n > 0 && heads > 0 && input.size(0) > 0,
-              "V quantization requires D64/D128 and nonempty dimensions");
-  TORCH_CHECK(output.size(0) == input.size(0) && output.size(1) == heads &&
-                  output.size(2) == blocks && output.size(3) == d && output.size(4) == 64 &&
-                  scale.size(0) == input.size(0) && scale.size(1) == heads &&
-                  scale.size(2) == blocks && scale.size(3) == d,
-              "V packed/scales must be [B,H,K64,D,64] / [B,H,K64,D]");
-  dim3 grid(blocks, heads, input.size(0));
-#define SAGE_V_QUANT(T, D) \
-  sageattention::ppu::detail::quantize_value_int8_kernel<T, D><<<grid, 128>>>( \
-      reinterpret_cast<T const *>(input.data_ptr()), output.data_ptr<int8_t>(), \
-      scale.data_ptr<float>(), n, heads, blocks, input.stride(0), \
-      input.stride(seq_dim), input.stride(head_dim))
-  if (input.scalar_type() == torch::kHalf) {
-    if (d == 64) SAGE_V_QUANT(cutlass::half_t, 64);
-    else SAGE_V_QUANT(cutlass::half_t, 128);
-  } else {
-    if (d == 64) SAGE_V_QUANT(cutlass::bfloat16_t, 64);
-    else SAGE_V_QUANT(cutlass::bfloat16_t, 128);
-  }
-#undef SAGE_V_QUANT
-  auto const error = hggcGetLastError();
-  TORCH_CHECK(error == hggcSuccess, "V INT8 quantization launch failed: ", hggcGetErrorString(error));
 }

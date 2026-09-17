@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Same-input PPU Sage INT8-QK/PV versus native BF16 FlashAttention forward.
+"""Same-input PPU Sage INT8/PV-FP16 versus native BF16 FlashAttention forward.
 
 No build, backend fallback, SDPA dispatch, backward, or parallel benchmark arms.
-Q/K/V preparation is excluded from the headline Sage core timing. --pv fp16
-selects the retained reference instead of the default U8/S8 integer PV.
+Q/K quantization and the V cast are excluded from the headline Sage core timing.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ def arguments(argv=None):
                           ("launches", 20)):
         p.add_argument("--" + name, type=int, default=default)
     p.add_argument("--causal", action="store_true")
-    p.add_argument("--pv", choices=("int8", "fp16"), default="int8")
     p.add_argument("--device", type=int, default=0)
     p.add_argument("--seed", type=int, default=0x5A6E)
     p.add_argument("--peak-bf16-tflops", type=float, default=500.0)
@@ -72,9 +70,8 @@ def main(argv=None):
                 causal=args.causal, input_dtype="bf16", output_dtype="bf16", layout="NHD",
                 dropout=0, mask="causal" if args.causal else "none", smooth_k=False,
                 logical_flops=flops, roles=ROLES, compile=False,
-                sage_pv=args.pv,
-                sage_core_excludes="Q/K quantization + V quantization/transpose" if args.pv == "int8" else "Q/K quantization + V bf16-to-fp16 cast",
-                preparation="Q/K/V preparation; input/output/quant buffers preallocated",
+                sage_core_excludes="Q/K quantization + V bf16-to-fp16 cast",
+                preparation="Q/K quantization + V cast; input/output/quant buffers preallocated",
                 fa_bookkeeping="native fwd still allocates its internal LSE/RNG buffers")
     print("[Sage/BF16 plan] " + json.dumps(plan), flush=True)
     if args.describe:
@@ -96,14 +93,7 @@ def main(argv=None):
     qi, ki = [torch.empty(shape, device="cuda", dtype=torch.int8) for _ in range(2)]
     qs = torch.empty((args.batch, args.heads, math.ceil(args.seq / 128) * 4), device="cuda", dtype=torch.float32)
     ks = torch.empty((args.batch, args.heads, math.ceil(args.seq / 64)), device="cuda", dtype=torch.float32)
-    if args.pv == "int8":
-        if not hasattr(sage, "quant_value_int8"):
-            raise RuntimeError("installed Sage wheel lacks INT8 PV; install the all-INT8 wheel or use --pv fp16")
-        vh = torch.empty((args.batch, args.heads, (args.seq + 63) // 64, args.head_dim, 64),
-                         device="cuda", dtype=torch.int8)
-        vs = torch.empty(vh.shape[:-1], device="cuda", dtype=torch.float32)
-    else:
-        vh = torch.empty(shape, device="cuda", dtype=torch.float16)
+    vh = torch.empty(shape, device="cuda", dtype=torch.float16)
     no_mean = torch.empty(0, device="cuda", dtype=torch.bfloat16)
     output = {name: torch.empty(shape, device="cuda", dtype=torch.bfloat16)
               for name in ("flash", "sage")}
@@ -112,18 +102,11 @@ def main(argv=None):
     def prepare():
         sage.quant_per_warp_int8(q, qi, qs, 128, 32, 0)
         sage.quant_per_block_int8(k, no_mean, ki, ks, 64, 0)
-        if args.pv == "int8":
-            sage.quant_value_int8(v, vh, vs, 0)
-        else:
-            vh.copy_(v)
+        vh.copy_(v)
 
     def sage_core():
-        if args.pv == "int8":
-            sage.qk_int8_sv_int8_accum_f32_attn(qi, ki, vh, output["sage"], qs, ks, vs,
-                                             0, int(args.causal), 2, scale, 0)
-        else:
-            sage.qk_int8_sv_f16_accum_f32_attn(qi, ki, vh, output["sage"], qs, ks,
-                                            0, int(args.causal), 2, scale, 0)
+        sage.qk_int8_sv_f16_accum_f32_attn(qi, ki, vh, output["sage"], qs, ks,
+                                        0, int(args.causal), 2, scale, 0)
 
     def fa_core():
         # Public FA2 fwd extension ABI, verified against flash-attention-for-sail.
@@ -191,7 +174,7 @@ def main(argv=None):
                   benchmark=file_identity(__file__), protocol="sequential-rotating-arms/device-events/launch-span",
                   warmup=args.warmup, samples=args.samples, launches=args.launches, seed=args.seed,
                   bf16_peak_tflops=args.peak_bf16_tflops,
-                  mfu_scope="BF16-equivalent normalization; NOT hardware SOL; Sage PV type is recorded in plan",
+                  mfu_scope="BF16-equivalent normalization; NOT hardware SOL for mixed INT8/FP16 Sage",
                   sampled_rows=rows, sampled_replay="STABLE", comparison_scope="quantization error diagnostic, not raw-bit equality",
                   sampled_max_abs=delta.abs().max().item(), sampled_rmse=rms,
                   sampled_relative_rmse=rms / max(reference_rms, 1e-30), results=summaries)

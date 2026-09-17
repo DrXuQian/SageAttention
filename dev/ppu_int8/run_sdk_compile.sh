@@ -15,6 +15,7 @@ printf '[PPU Sage SDK] sha=%s sdk=%s out=%s\n' "$sha" "$sdk" "$out"
 
 export PPU_SDK="$sdk"
 export PATH="$sdk/bin:$PATH"
+python "$repo/dev/ppu_int8/check_fp16_default.py"
 (
   cd "$repo"
   python setup_ppu.py build_ext --force \
@@ -32,15 +33,13 @@ fi
 "$sdk/bin/hgobjdump" --dump-resource-usage=all "$extension" >"$out/resources.log"
 "$sdk/bin/hgobjdump" --dump-isa "$extension" >"$out/shipping-isa.log"
 
-attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_kernel' \
+attn_count="$(rg -c 'Func [0-9]+ \(kernel\): .*qk_int8_pv_f16_kernel' \
   "$out/device-functions.log")"
 quant_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_int8_kernel' \
   "$out/device-functions.log")"
-value_count="$(rg -c 'Func [0-9]+ \(kernel\): .*quantize_value_int8_kernel' \
-  "$out/device-functions.log")"
-if [[ "$attn_count" -ne 48 || "$quant_count" -ne 20 || "$value_count" -ne 4 ]]; then
-  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/48 quant=%s/20 value=%s/4\n' \
-    "$attn_count" "$quant_count" "$value_count" >&2
+if [[ "$attn_count" -ne 16 || "$quant_count" -ne 12 ]]; then
+  printf '[PPU Sage SDK] FAIL: device specialization census dense=%s/16 quant=%s/12\n' \
+    "$attn_count" "$quant_count" >&2
   exit 1
 fi
 if rg -q 'block_sparse_kernel|radial_sparse_kernel' "$out/device-functions.log"; then
@@ -56,10 +55,10 @@ import sys
 text = Path(sys.argv[1]).read_text()
 vregs = [int(value) for value in re.findall(r"vreg_number:(\d+)", text)]
 stacks = [int(value) for value in re.findall(r"STACK SIZE:(\d+)", text)]
-if len(vregs) != 72 or len(stacks) != 72:
+if len(vregs) != 28 or len(stacks) != 28:
     raise SystemExit(
-        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/72 "
-        f"stacks={len(stacks)}/72"
+        f"[PPU Sage SDK] FAIL: resource census vregs={len(vregs)}/28 "
+        f"stacks={len(stacks)}/28"
     )
 private = [value for value in stacks if value]
 if max(vregs) > 256 or private:
@@ -68,7 +67,7 @@ if max(vregs) > 256 or private:
         f"{private}"
     )
 print(
-    f"[PPU Sage SDK] resources kernels=72 max_vregs={max(vregs)} "
+    f"[PPU Sage SDK] resources kernels=28 max_vregs={max(vregs)} "
     "spill_stack=0/PASS"
 )
 PY
@@ -85,8 +84,7 @@ probe_includes=(
 for target_include in "$sdk"/targets/*/include; do
   probe_includes+=("-I$target_include")
 done
-for probe in bridge requant probability_mask probability_pack; do
-  "$sdk/bin/hgcc" \
+"$sdk/bin/hgcc" \
   --forward-unknown-to-host-compiler --forward-unknown-to-host-linker \
   -arch=ppu_10 -x hg -DSWITCH_TO_HGGCRT \
   -Xcompiler -ftemplate-depth=8192 -Xllvm -ppu-max-vreg-count=256 \
@@ -94,50 +92,18 @@ for probe in bridge requant probability_mask probability_pack; do
   -DCUTLASS_USE_PACKED_TUPLE=1 -DCUTE_USE_PACKED_TUPLE=1 \
   -DUSE_PPU=1 -DUSE_AIU=1 -O3 -std=c++17 --use_fast_math -fPIC \
   "${probe_includes[@]}" \
-  -c "$repo/dev/ppu_int8/${probe}_codegen_probe.cu" \
-  -o "$out/${probe}_codegen_probe.o" \
-  >"$out/$probe-codegen-build.log" 2>&1
-  "$sdk/bin/hgobjdump" --dump-isa "$out/${probe}_codegen_probe.o" \
-    >"$out/$probe-codegen-isa.log"
-done
+  -c "$repo/dev/ppu_int8/bridge_codegen_probe.cu" \
+  -o "$out/bridge_codegen_probe.o" \
+  >"$out/bridge-codegen-build.log" 2>&1
+"$sdk/bin/hgobjdump" --dump-isa "$out/bridge_codegen_probe.o" \
+  >"$out/bridge-codegen-isa.log"
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" \
   "$out/bridge-codegen-isa.log"
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
   "$out/shipping-isa.log"
-python "$repo/dev/ppu_int8/check_all_int8_codegen.py" "$out/shipping-isa.log" --permuted-k
-for plant in floating-mma missing-specialization; do
-  if python "$repo/dev/ppu_int8/check_all_int8_codegen.py" \
-      "$out/shipping-isa.log" --permuted-k --plant "$plant" >"$out/all-int8-$plant.log" 2>&1; then
-    echo "[PPU Sage SDK] FAIL: all-int8 negative survived: $plant" >&2
-    exit 1
-  fi
-  grep -q '\[all-int8 ISA\] FAIL:' "$out/all-int8-$plant.log"
-done
-
-python "$repo/dev/ppu_int8/check_requant_codegen.py" \
-  --probe "$out/requant-codegen-isa.log" --out "$out/requant-probe.json"
-python "$repo/dev/ppu_int8/check_probability_mask_codegen.py" \
-  --probe "$out/probability_mask-codegen-isa.log"
-python "$repo/dev/ppu_int8/check_probability_pack_codegen.py" \
-  "$out/probability_pack-codegen-isa.log"
-if python "$repo/dev/ppu_int8/check_probability_mask_codegen.py" \
-    --probe "$out/probability_mask-codegen-isa.log" --plant \
-    > "$out/probability-mask-negative.log" 2>&1; then
-  echo '[PPU Sage SDK] FAIL: per-P mask negative survived'
-  exit 1
-fi
-for plant in scalar-clamp extra-shuffle; do
-  if python "$repo/dev/ppu_int8/check_requant_codegen.py" \
-      --probe "$out/requant-codegen-isa.log" --plant "$plant" \
-      >"$out/requant-$plant.log" 2>&1; then
-    echo "[PPU Sage SDK] FAIL: requant negative survived: $plant" >&2
-    exit 1
-  fi
-  grep -q '\[requant ISA\] FAIL:' "$out/requant-$plant.log"
-done
 
 sha256sum "$extension" | tee "$out/binary.sha256"
 python "$repo/tools/make_ppu_manifest.py" --artifact "$extension" \
   --sdk "$sdk" --resources "$out/resources.log"
-printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s value=%s; no device code executed\n' \
-  "$attn_count" "$quant_count" "$value_count"
+printf '[PPU Sage SDK] PASS: native -x hg build; dense=%s quant=%s; no device code executed\n' \
+  "$attn_count" "$quant_count"

@@ -1,5 +1,0 @@
-candidate,device_run,latency_us,static_best_path,static_worst_path,h3_vregs,private_stack,decision
-baseline,NOT_RUN,,1569,1876,244,0,RETAIN_IMMUTABLE
-conditional,NOT_RUN,,1456,1891,250,0,REJECT_REGISTER_REGRESSION
-uniform,NOT_RUN,,1468,1903,250,0,REJECT_REGISTER_REGRESSION
-late,NOT_RUN,,1459,1894,248,0,REJECT_REGISTER_REGRESSION

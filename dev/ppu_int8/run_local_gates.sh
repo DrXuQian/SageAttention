@@ -4,6 +4,7 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 out="${SAGEATTENTION_PPU_ORACLE_OUT:-/workspace/sageattention-ppu-local}"
 mkdir -p "$out"
+python "$repo/dev/ppu_int8/check_fp16_default.py"
 
 nvcc_bin="${NVCC:-nvcc}"
 probe_log="$out/compiler-probe.log"
