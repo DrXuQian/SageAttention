@@ -11,6 +11,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 
 from check_requant_codegen import integer_alu
 from compare_native_sage_opcodes import require_mma
@@ -35,8 +36,19 @@ GROUPS = {
 }
 
 
-def select(text):
-    rows = [k for name, k in parse_native(text).items() if name.startswith(TARGET)]
+def h3_key_layout(signature):
+    m = re.search(r"qk_int8_pv_kernel<128,\s*false,\s*false,\s*cutlass::bfloat16_t,\s*true"
+                  r"(?:,\s*(true|false))?>", signature)
+    if not m:
+        raise ValueError("not the exact H3 integer-PV specialization")
+    return "permuted" if m[1] == "true" else "raw"
+
+
+def select(text, key_layout="raw"):
+    if key_layout not in ("raw", "permuted"):
+        raise ValueError("unknown key layout")
+    rows = [k for name, k in parse_native(text).items() if name.startswith(TARGET)
+            and h3_key_layout(subprocess.check_output(["c++filt", name], text=True)) == key_layout]
     if len(rows) != 1:
         raise ValueError("expected one exact H3 integer-PV specialization")
     return rows[0]
@@ -146,8 +158,9 @@ def loop_inventory(kernel):
 
 
 def anchor_acu(kernel, loop, raw):
-    if len(raw) != 1 or "qk_int8_pv_kernel<128, false, false, cutlass::bfloat16_t, true>" not in raw[0]["name"]:
-        raise ValueError("ACU target is not the exact H3 specialization")
+    expected = h3_key_layout(subprocess.check_output(["c++filt", kernel.name], text=True))
+    if len(raw) != 1 or h3_key_layout(raw[0]["name"]) != expected:
+        raise ValueError("ACU target is not the exact H3 specialization/key layout")
     instructions = raw[0]["instructions"]
     base = min(r["pc"] for r in instructions)
     rows = {r["pc"] - base: r for r in instructions}
@@ -212,12 +225,16 @@ def main():
     parser.add_argument("--after", type=Path, required=True)
     parser.add_argument("--acu", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
+    parser.add_argument("--candidate-key-layout", choices=("raw", "permuted"), default="raw")
+    parser.add_argument("--candidate-acu", type=Path,
+                        help="Optional NEW per-PC measured export; never substitute a static inventory")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     try:
-        old, new = select(args.before.read_text()), select(args.after.read_text())
+        old = select(args.before.read_text())
+        new = select(args.after.read_text(), args.candidate_key_layout)
         before, loop = loop_inventory(old)
-        after, _ = loop_inventory(new)
+        after, new_loop = loop_inventory(new)
         anchor = anchor_acu(old, loop, json.loads(args.acu.read_text()))
         acu_sha = hashlib.sha256(args.acu.read_bytes()).hexdigest()
         reference = reference_account(json.loads(args.reference.read_text()), acu_sha)
@@ -228,11 +245,22 @@ def main():
                                                       ("acu", args.acu), ("reference", args.reference))},
                       integer_category_note="fixed static scope also includes s.not/s.mull/s.mulh; old reference excludes these once-only ops (0.011275 per visit)",
                       before=before, after=after, old_acu_anchor=anchor, measured_reference=reference)
+        result["candidate_key_layout"] = args.candidate_key_layout
+        if args.candidate_acu:
+            measured = anchor_acu(new, new_loop, json.loads(args.candidate_acu.read_text()))
+            result["candidate_measured"] = measured
+            result["input_sha256"]["candidate_acu"] = hashlib.sha256(args.candidate_acu.read_bytes()).hexdigest()
+            result["scope"] = "OLD_AND_CANDIDATE_ACU_PC_BOUND; LATENCY_NOT_ADJUDICATED"
+            ref_rows = json.loads(args.reference.read_text())["results"]
+            result["candidate_total_instruction_ratios"] = {
+                name: measured["groups"]["all"]["measured_per_visit"] / row["per_warp_k64"]["total"]
+                for name, row in ref_rows.items() if name != "sass.json"}
+            print("[hot account] candidate MEASURED", json.dumps(measured["groups"]["all"]))
         args.out.write_text(json.dumps(result, indent=2) + "\n")
         print("[hot account] old PC/operand anchor", anchor["instruction_and_operand_matches"], "PASS")
         for name, counts in after["groups"].items():
             print("[hot account] candidate", name, json.dumps(counts))
-        print("[hot account] PASS: bounds are not a new dynamic count or latency")
+        print("[hot account] PASS: static bounds stay separate; dynamic counts require candidate-acu; no latency verdict")
         return 0
     except ValueError as error:
         print("[hot account] FAIL:", error)

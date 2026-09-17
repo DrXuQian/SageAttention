@@ -93,3 +93,22 @@ both core and K-prepare+core versus raw INT8. Overlapping sample envelopes are
 UNRESOLVED; slower is rejected regardless of fewer instructions. Report the
 FP16 control even if it remains faster. The user570ms observation remains
 unbound to SHA/report/timer and is not assigned to this candidate.
+
+## Reading the next report without crossing arms
+
+`account_hot_loop.py` accepts `--candidate-key-layout permuted`; raw remains
+the default for historical binaries. A fresh per-PC ACU export is supplied via
+`--candidate-acu`. Until that argument exists, output remains explicitly
+`STATIC_CFG_BOUND_FOR_CANDIDATE; OLD_ACU_ONLY; NO_NEW_DEVICE_RESULT`.
+
+With a fresh export, the reader requires the exact H3 key-layout signature,
+matches every reachable PC's opcode **and operands** to the candidate native
+body, and independently closes both MMA work totals. Only then does it emit
+`candidate_measured` and ratios against both recorded NVIDIA FP8 modes. It
+does not turn profile duration into a speed verdict: normal-event results
+remain separate. Tests reject an old raw-K report passed to the permuted
+reader and an old report with the same raw layout but a different native body.
+
+The already-recorded old ACU can be replayed against its own old body to test
+this parser branch. Such a self-replay is a reader regression test, **not a
+new candidate measurement**. No device result has been created by this test.
