@@ -221,6 +221,32 @@ runtime directory plus its matching `flash-attention-for-sail` source directory.
 CPU plan/arithmetic contracts are in `dev/ppu_int8/check_sage_bf16_bench.py`;
 device performance must be measured on the box.
 
+### Single-launch MiniMax H3 ACU capture
+
+`tools/profile_ppu_attention_pipes.py` is committed separately from the uploaded
+experimental kernel patch. It uses the installed native extension, prints its
+path and SHA256, and never builds or changes the installed wheel. `--arm sage`
+does not import FlashAttention. BF16/NHD inputs, quantization and scale settings
+match the A/B benchmark above. No warmup or timed benchmark loop is performed.
+
+```bash
+mkdir -p /workspace/sage-h3-acu
+cd /workspace
+/sim/eec/shared/junfu.qx/asight/bin/acu \
+  -f -o /workspace/sage-h3-acu/sage-h3 --set full \
+  python /sim/eec/shared/junfu.qx/SageAttention/tools/profile_ppu_attention_pipes.py \
+    --arm sage --batch 1 --heads 56 --seq 73774 --head-dim 128 \
+    --device "${DEVICE:-0}" --iters 1
+```
+
+Use the already-working PPU runtime environment. `DEVICE` is the Torch-visible
+ordinal. The expected Sage kernel is `qk_int8_pv_f16_kernel`, grid `(577,56,1)`,
+128 threads/CTA, noncausal. ACU can also list input initialization, Q/K
+quantization and the V cast: do not add those to the core kernel duration.
+ACU replay may execute the single requested call multiple times for counters.
+`--describe` and `dev/ppu_int8/check_attention_profile_target.py` validate the
+host-side plan only, not device correctness or performance.
+
 ### Recorded FP16-input result
 
 The prebuilt extension from `44a641a` (SHA256
