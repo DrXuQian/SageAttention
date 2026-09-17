@@ -19,6 +19,7 @@
 
 #include "attn_ppu_layout.cuh"
 #include "attn_ppu_int8_layout.cuh"
+#include "attn_ppu_probability.cuh"
 
 namespace sageattention::ppu {
 

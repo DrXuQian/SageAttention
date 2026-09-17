@@ -277,6 +277,10 @@ __global__ void qk_int8_pv_kernel(
         }
 
         float tile_sum = 0.0f;
+        // Only integer PV uses the finite mask sentinel; classify it once
+        // per row, keeping all-masked rows zero without per-P predicates.
+        float const probability_origin = Int8PV
+            ? probability_exponent_origin(tile_max) : 0.0f;
 #pragma unroll
         for (int kb = 0; kb < kKVBlocks; ++kb) {
           float *s = score.fp32[qb][kb];
@@ -285,8 +289,7 @@ __global__ void qk_int8_pv_kernel(
             float probability[4];
 #pragma unroll
             for (int cs = 0; cs < 4; ++cs) {
-              float const p = s[base + cs] <= -1.0e29f ? 0.0f
-                  : exp2f(s[base + cs] - tile_max);
+              float const p = exp2f(s[base + cs] - probability_origin);
               tile_sum += p;
               probability[cs] = p;
             }

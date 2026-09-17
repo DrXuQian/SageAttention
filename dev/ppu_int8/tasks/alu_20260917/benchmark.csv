@@ -1,0 +1,2 @@
+candidate,scope,device,median_us,measurement,evidence
+baseline,H3 integer PV,PPU,,NOT_RUN,/workspace/sageattention-requant-candidate
