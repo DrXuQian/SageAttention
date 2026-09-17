@@ -91,6 +91,12 @@ __global__ void qk_int8_pv_kernel(
   auto *smem_k = smem_q + kBlockQ * HeadDim;
   auto *smem_v = reinterpret_cast<Value *>(
       smem_k + kBlockKV * HeadDim);
+  auto *smem_v_scale = reinterpret_cast<float *>(smem_v + kBlockKV * HeadDim);
+  float const *v_scale_head = nullptr;
+  if constexpr (use_shared_value_scale<HeadDim, Causal, Int8PV>) {
+    v_scale_head = value_scale + ValueScaleStage<HeadDim>::head_offset(
+        batch, kv_head, num_kv_heads, (kv_len + kBlockKV - 1) / kBlockKV);
+  }
 
   auto issue_k = [&](int kv_block) {
     if (kv_block * kBlockKV < kv_len && lane == 0 && warp == 0) {
@@ -105,6 +111,10 @@ __global__ void qk_int8_pv_kernel(
   };
 
   auto issue_v = [&](int kv_block) {
+    if constexpr (use_shared_value_scale<HeadDim, Causal, Int8PV>) {
+      ValueScaleStage<HeadDim>::publish(
+          smem_v_scale, v_scale_head, kv_block, warp * 32 + lane);
+    }
     if (lane == 0 && warp == 0) {
 #pragma unroll
       for (int cube = 0; cube < kHeadSlices; ++cube) {
@@ -327,9 +337,13 @@ __global__ void qk_int8_pv_kernel(
 #pragma unroll
         for (int cs = 0; cs < 4; ++cs) {
           int const channel = d * 16 + layout::accumulator_column(lane, cs);
-          v_scales[cs] = value_scale[
-              ((int64_t(batch) * num_kv_heads + kv_head) * k_scale_blocks + kv)
-              * HeadDim + channel];
+          if constexpr (use_shared_value_scale<HeadDim, Causal, Int8PV>) {
+            v_scales[cs] = smem_v_scale[channel];
+          } else {
+            v_scales[cs] = value_scale[
+                ((int64_t(batch) * num_kv_heads + kv_head) * k_scale_blocks + kv)
+                * HeadDim + channel];
+          }
         }
         int32_t partial[kQBlocksPerWarp][8] = {};
 #pragma unroll
@@ -429,7 +443,8 @@ void launch_ppu_attention(
   size_t const smem_bytes =
       kBlockQ * HeadDim * sizeof(int8_t)
       + kBlockKV * HeadDim * sizeof(int8_t)
-      + kBlockKV * HeadDim * (Int8PV ? sizeof(int8_t) : sizeof(cutlass::half_t));
+      + kBlockKV * HeadDim * (Int8PV ? sizeof(int8_t) : sizeof(cutlass::half_t))
+      + (use_shared_value_scale<HeadDim, Causal, Int8PV> ? ValueScaleStage<HeadDim>::Bytes : 0);
   auto kernel = &qk_int8_pv_kernel<HeadDim, Causal, ReturnLse, Output, Int8PV>;
   // The opt-in is a per-function property.  Reissuing it for every attention
   // op adds host/runtime work but cannot change the already-loaded kernel.

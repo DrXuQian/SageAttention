@@ -23,4 +23,16 @@ for pair in 'probability_mask_oracle unmasked-origin' 'probability_pack_exhausti
   fi
   echo "[P seams] $negative EXPECTED-RED/PASS"
 done
+"${CXX:-c++}" -std=c++17 -O3 -ffp-contract=off -fno-fast-math \
+  "${inc[@]}" "$repo/dev/ppu_int8/value_scale_stage_oracle.cpp" \
+  -o "$out/value_scale_stage_oracle"
+"$out/value_scale_stage_oracle" | tee "$out/value_scale_stage_oracle.log"
+for negative in missing-thread wrong-head-pitch overlap-payload wrong-column; do
+  if "$out/value_scale_stage_oracle" "$negative" > "$out/$negative.log" 2>&1; then
+    echo "[V-scale seams] FAIL: $negative survived"
+    exit 1
+  fi
+  grep -q '\[V-scale stage\].* FAIL' "$out/$negative.log"
+  echo "[V-scale seams] $negative EXPECTED-RED/PASS"
+done
 echo '[P seams] host numerical proofs PASS; PPU execution NOT RUN'

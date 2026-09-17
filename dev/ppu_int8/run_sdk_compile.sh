@@ -85,7 +85,7 @@ probe_includes=(
 for target_include in "$sdk"/targets/*/include; do
   probe_includes+=("-I$target_include")
 done
-for probe in bridge requant probability_mask; do
+for probe in bridge requant probability_mask probability_pack; do
   "$sdk/bin/hgcc" \
   --forward-unknown-to-host-compiler --forward-unknown-to-host-linker \
   -arch=ppu_10 -x hg -DSWITCH_TO_HGGCRT \
@@ -118,6 +118,8 @@ python "$repo/dev/ppu_int8/check_requant_codegen.py" \
   --probe "$out/requant-codegen-isa.log" --out "$out/requant-probe.json"
 python "$repo/dev/ppu_int8/check_probability_mask_codegen.py" \
   --probe "$out/probability_mask-codegen-isa.log"
+python "$repo/dev/ppu_int8/check_probability_pack_codegen.py" \
+  "$out/probability_pack-codegen-isa.log"
 if python "$repo/dev/ppu_int8/check_probability_mask_codegen.py" \
     --probe "$out/probability_mask-codegen-isa.log" --plant \
     > "$out/probability-mask-negative.log" 2>&1; then
