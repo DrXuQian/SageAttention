@@ -36,6 +36,14 @@ if actual.parent != expected:
 print(f"[PPU ALU candidate] loaded={actual}")
 PY
 python "$runner_repo/dev/ppu_int8/device_all_int8.py" 2>&1 | tee "$out/correctness.log"
+if [[ "${BENCHMARK:-1}" == 1 ]]; then
+  # Normal events in a separate, unprofiled process. Both PV arms use identical
+  # prequantized Q/K and the same original V; no preparation inside the timer.
+  python "$runner_repo/tools/benchmark_ppu_pv_core.py" \
+    --batch 1 --heads 56 --seq 73774 --head-dim 128 --device "${DEVICE:-0}" \
+    --warmup "${WARMUP:-2}" --samples "${SAMPLES:-7}" --launches "${LAUNCHES:-1}" \
+    --out "$out/pv-core-events.json" 2>&1 | tee "$out/pv-core-events.log"
+fi
 if [[ "${PROFILE:-0}" == 1 ]]; then
   "${ACU:-/sim/eec/shared/junfu.qx/asight/bin/acu}" -f \
     -o "$out/sage-h3-int8-$candidate" --set full \
