@@ -1,11 +1,11 @@
 # PPU Sage requant checkpoint
 
-- updated-at: 2026-09-17 08:52:49 UTC
-- working-on: user-authorized deferred denominator implemented on INT8 experiment branch; local SDK/native and host gates pass, packaging isolated A/B handoff
+- updated-at: 2026-09-17 09:03:35 UTC
+- working-on: deferred denominator clean build and isolated prebuilt complete; publishing execution-only A/B handoff
 - baseline: fbf3d0feb1d356d7f4bad4713955de9a6e46f864; uploaded all-INT8 H3 ACU
 - numerical contract: P multiply/RNE/clamp, P/V scales and numerator order unchanged; denominator FP32 reassociation explicitly admitted under unchanged numeric tolerances and raw-bit per-variant replay
 - blocked-on: fresh PPU candidate numeric/latency/ACU execution; no PPU speedup or NVIDIA parity claimed
-- last-commit: d8082cd8ba2e44f3acfa7f35b64e4986b545f600 (completed report/code checkpoint; excludes this STATUS-only follow-up; immutable candidate source remains a49338f)
+- last-commit: 567bba728393209c4ac13f38279be93f6e56e830 (deferred denominator clean source; this artifact/status follow-up excluded; before source remains a49338f)
 - PPU candidate verdict: NOT RUN; no speedup claimed and no wheel published for the requant candidate; the NVIDIA reference below was measured
 - local results: H3 static integer/bit ALU 1136->832 (-26.76%), reachable total 4046->3672 (-9.24%), regs 250->250, spill 0; 16 legacy FP16 bodies unchanged; real-traits 4096-bit basis and all negative gates PASS; full SDK 48/48 no spill
 - remote state: unmodified upstream d1a57a546c3d395b1ffcbeecc66d81db76f3b4b5 profiled on RTX 5070; two sequential FP8-PV modes, common 149022944 warp/K64 visits; no global installation; no equal-precision or latency claim
@@ -19,4 +19,5 @@
 - remaining gap: QK casts=64 common, PV casts=128 extra but native FP16-buffer has 128 HADD2.F32 restorations. Candidate integer sites=365 once-only+298 loop-union, not 663/iteration. P retiling=32 shuffles; denominator=8 shuffles/K64 versus native once at epilogue. Deferral has a one-ULP host witness; score FMA also changes rounding. Neither silently implemented.
 - new verification: parser 7/7; hot-account negatives 7/7; prior codegen negatives 7/7 expected-red; two arithmetic counterexamples plus exact controls; 16/16 FP16 streams unchanged; no new device measurement.
 - deferred denominator: 16/16 INT8 native K-loop shuffles 48->40 plus 8 post-loop; 16/16 FP16 and 16/16 quant native streams unchanged. H3 regs=246/128, stack=0; shared unchanged. Production-helper host 2560 traces/478720 updates worst relative error 4.47630923e-7 <=5e-4; four negatives red. No device run.
-- next: finish clean-source build + isolated prebuilt/A-B runner, then device correctness and ACU against a49338f. Score-FMA change remains separate and unimplemented.
+- deferred artifact: clean 567bba7 SDK build 48/48 no spills, native replay identical to first candidate 48/48. DSO 0c41e28d02c491b61992fd33de75eacafd76a967cc937b2d882f23f7029ad22d; separate prebuilt/ppu_10/deferred-denominator, Torch2.9/CPython3.12/ABI1/runtime13.0. Baseline dc509625... unchanged. Both isolated imports and native CPU rejection tested.
+- next: user runs tools/run_ppu_int8_denominator_ab_box.sh; same extended correctness driver and H3 ACU for sequential before/after binaries. Device=NOT_RUN locally, no speedup/admission claimed. Score-FMA change remains separate and unimplemented.

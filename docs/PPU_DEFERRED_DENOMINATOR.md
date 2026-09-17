@@ -74,6 +74,12 @@ The experimental prebuilt is published separately under
 `prebuilt/ppu_10/deferred-denominator`; the original `alu-candidate` is not
 overwritten. No replacement main wheel.
 
+Clean candidate source: `567bba728393209c4ac13f38279be93f6e56e830`.
+DSO SHA256: `0c41e28d02c491b61992fd33de75eacafd76a967cc937b2d882f23f7029ad22d`.
+All 48 native streams match the first local candidate; artifact/source/ABI
+verification and both isolated imports pass. Runtime SONAME is
+`libhggcrt.13.0.so`; the manifest requires Torch2.9/CPython3.12/C++11 ABI1.
+
 From `experiment/ppu-pv-int8`, the execution-only A/B is:
 
 ```bash
