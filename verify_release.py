@@ -6,13 +6,26 @@ from pathlib import Path
 import zipfile
 
 
-def verify_release(root, experimental=False, release=None):
+def verify_default(core_source):
+    tree = ast.parse(core_source)
+    entry = next(node for node in tree.body
+                 if isinstance(node, ast.FunctionDef) and node.name == "sageattn")
+    branches = [node for node in entry.body if isinstance(node, ast.If)
+                and isinstance(node.test, ast.Name) and node.test.id == "PPU_ENABLED"]
+    if len(branches) != 1 or len(branches[0].body) != 1:
+        raise ValueError("unknown installed PPU dispatch structure")
+    statement = branches[0].body[0]
+    if not (isinstance(statement, ast.Return) and isinstance(statement.value, ast.Call)
+            and isinstance(statement.value.func, ast.Name)
+            and statement.value.func.id == "sageattn_qk_int8_pv_fp16_ppu"):
+        raise ValueError("installed default does not match FP16 PV")
+
+
+def verify_release(root, release=None):
     root = Path(root)
     if release is None:
-        name = "release-pv-int8.json" if experimental else "release.json"
-        release = json.loads((root / name).read_text())
-    expected_pv = "int8" if experimental else "fp16"
-    if release.get("default_pv") != expected_pv:
+        release = json.loads((root / "release.json").read_text())
+    if release.get("default_pv") != "fp16" or release.get("channel") != "main":
         raise ValueError("release precision differs from the selected channel")
     filename = release["wheel"]
     if Path(filename).name != filename:
@@ -28,43 +41,35 @@ def verify_release(root, experimental=False, release=None):
                 or native["artifact_sha256"] != release["native_sha256"]
                 or manifest["package_source_sha"] != release["package_source_sha"]):
             raise ValueError("embedded native/source identity differs from release")
-        tree = ast.parse(archive.read("sageattention/core.py"))
-        entry = next(node for node in tree.body
-                     if isinstance(node, ast.FunctionDef) and node.name == "sageattn")
-        branches = [node for node in entry.body if isinstance(node, ast.If)
-                    and isinstance(node.test, ast.Name) and node.test.id == "PPU_ENABLED"]
-        if len(branches) != 1 or len(branches[0].body) != 1:
-            raise ValueError("unknown installed PPU dispatch structure")
-        statement = branches[0].body[0]
-        if not (isinstance(statement, ast.Return) and isinstance(statement.value, ast.Call)
-                and isinstance(statement.value.func, ast.Name)
-                and statement.value.func.id == f"sageattn_qk_int8_pv_{expected_pv}_ppu"):
-            raise ValueError("installed default does not match release precision")
+        verify_default(archive.read("sageattention/core.py"))
     return release, wheel
 
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent
-    for experimental in (False, True):
-        release, wheel = verify_release(root, experimental)
-        print(f"[wheel channel] {release['channel']} PV={release['default_pv']} {wheel.name} PASS")
-        changed = dict(release, default_pv="fp16" if experimental else "int8")
+    release, wheel = verify_release(root)
+    print(f"[wheel channel] {release['channel']} PV={release['default_pv']} {wheel.name} PASS")
+    for label, changed in (
+        ("precision", dict(release, default_pv="int8")),
+        ("channel", dict(release, channel="experimental")),
+        ("payload-hash", dict(release, wheel_sha256="0" * 64)),
+    ):
         try:
-            verify_release(root, experimental, changed)
+            verify_release(root, changed)
         except ValueError:
-            print("[wheel negative] swapped precision EXPECTED-RED/PASS")
+            print(f"[wheel negative] {label} EXPECTED-RED/PASS")
         else:
-            raise AssertionError("precision mutation survived")
-    default = json.loads((root / "release.json").read_text())
-    wrong_payload = dict(default)
-    experiment = json.loads((root / "release-pv-int8.json").read_text())
-    for key in ("wheel", "wheel_sha256", "native_sha256", "package_source_sha"):
-        wrong_payload[key] = experiment[key]
+            raise AssertionError(f"{label} mutation survived")
+    with zipfile.ZipFile(wheel) as archive:
+        core = archive.read("sageattention/core.py").decode()
+    wrong_route = core.replace("sageattn_qk_int8_pv_fp16_ppu", "sageattn_qk_int8_pv_int8_ppu")
+    if wrong_route == core:
+        raise AssertionError("route negative did not mutate the real wheel source")
     try:
-        verify_release(root, False, wrong_payload)
+        verify_default(wrong_route)
     except ValueError as error:
         if "installed default" not in str(error):
             raise
-        print("[wheel negative] valid INT8 wheel disguised as FP16 EXPECTED-RED/PASS")
+        print("[wheel negative] integer-SV default in installed source EXPECTED-RED/PASS")
     else:
-        raise AssertionError("a valid wrong-precision wheel was admitted")
+        raise AssertionError("wrong installed precision was admitted")

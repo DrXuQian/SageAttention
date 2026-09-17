@@ -9,8 +9,6 @@ import sys
 import torch
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--experimental-pv-int8', action='store_true',
-                    help='Install the original post2 INT8-PV experiment instead of mainline FP16 PV')
 parser.add_argument('--verify-only', action='store_true')
 args = parser.parse_args(sys.argv[2:])
 
@@ -21,7 +19,7 @@ if not torch._C._GLIBCXX_USE_CXX11_ABI:
 root = pathlib.Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from verify_release import verify_release
-release, wheel = verify_release(root, args.experimental_pv_int8)
+release, wheel = verify_release(root)
 print('Verified', release['channel'], 'PV=' + release['default_pv'], release['version'])
 if args.verify_only:
     raise SystemExit(0)
