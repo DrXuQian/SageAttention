@@ -15,6 +15,7 @@
 #include <cute/arch/mma_ppu0010.hpp>
 #include <cute/numeric/integral_constant.hpp>
 #include <cutlass/numeric_types.h>
+#include <cutlass/numeric_conversion.h>
 
 #include "attn_ppu_layout.cuh"
 #include "attn_ppu_int8_layout.cuh"
@@ -83,22 +84,33 @@ __device__ __forceinline__ void mma_u8s8s32(
       du[0], du[1], du[2], du[3], du[4], du[5], du[6], du[7]);
 }
 
-// Each source word packs one C-layout row's four local columns. Transpose
-// those bytes across the four row-peer lanes; no floating MMA or shared copy.
+// Keep the original FP32 multiply and round-to-nearest-even conversion.
+// actlize combines the integer clamp and byte assembly into saturated U8
+// packing; no magic-bias FMA (which would change rounding at half-code ties).
+__device__ __forceinline__ uint32_t pack_probability_u8(
+    float const (&probability)[4]) {
+  cutlass::Array<float, 4> scaled;
+#pragma unroll
+  for (int i = 0; i < 4; ++i) scaled[i] = probability[i] * 255.0f;
+  auto packed = cutlass::NumericArrayConverter<uint8_t, float, 4>{}(scaled);
+  return reinterpret_cast<uint32_t const &>(packed);
+}
+
+// Each source word packs one C-layout row's four local columns. The two-stage
+// butterfly transposes the bytes within each four-lane row-peer group: two
+// exchanges and two byte permutations, without FP MMA or shared staging.
 __device__ __forceinline__ void probability_to_u8_operand(
     uint32_t (&dst)[4], uint32_t const (&left)[2], uint32_t const (&right)[2]) {
   int const lane = int(threadIdx.x) & 31;
+  unsigned const pair_selector = layout::probability_pair_selector(lane);
+  unsigned const quad_selector = layout::probability_quad_selector(lane);
 #pragma unroll
   for (int word = 0; word < 4; ++word) {
     uint32_t const source = (word & 1) ? right[word / 2] : left[word / 2];
-    uint32_t packed = 0;
-#pragma unroll
-    for (int byte = 0; byte < 4; ++byte) {
-      uint32_t const peer = __shfl_sync(
-          0xffffffffu, source, layout::probability_source_lane(lane, byte));
-      packed |= ((peer >> (8 * (lane & 3))) & 255u) << (8 * byte);
-    }
-    dst[word] = packed;
+    uint32_t const paired = __byte_perm(source,
+        __shfl_xor_sync(0xffffffffu, source, 1), pair_selector);
+    dst[word] = __byte_perm(paired,
+        __shfl_xor_sync(0xffffffffu, paired, 2), quad_selector);
   }
 }
 

@@ -282,16 +282,15 @@ __global__ void qk_int8_pv_kernel(
           float *s = score.fp32[qb][kb];
           int const base = row_slot * 4;
           if constexpr (Int8PV) {
-            uint32_t packed = 0;
+            float probability[4];
 #pragma unroll
             for (int cs = 0; cs < 4; ++cs) {
               float const p = s[base + cs] <= -1.0e29f ? 0.0f
                   : exp2f(s[base + cs] - tile_max);
               tile_sum += p;
-              uint32_t const code = uint32_t(max(0, min(255, __float2int_rn(p * 255.0f))));
-              packed |= code << (8 * cs);
+              probability[cs] = p;
             }
-            p_codes[qb][kb][row_slot] = packed;
+            p_codes[qb][kb][row_slot] = pack_probability_u8(probability);
           } else {
             s[base] = exp2f(s[base] - new_max);
             s[base + 1] = exp2f(s[base + 1] - new_max);

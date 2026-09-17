@@ -21,13 +21,22 @@ done
 # oracle with the selected loader; unresolved symbols cannot become a PASS.
 "${CXX:-c++}" "$out/oracle.o" -L"$sdk/lib" -Wl,-rpath-link,"$sdk/lib" \
   -Wl,--allow-shlib-undefined -lhggcrt1 -lhggc -lalippu -o "$out/oracle"
-if [[ -n "${PPU_HOST_LOADER:-}" ]]; then
-  : "${PPU_HOST_LIBRARY_PATH:?set the library path for PPU_HOST_LOADER}"
-  "$PPU_HOST_LOADER" --library-path "$PPU_HOST_LIBRARY_PATH" "$out/oracle" \
-    | tee "$out/result.log"
-else
-  LD_LIBRARY_PATH="$sdk/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$out/oracle" | tee "$out/result.log"
-fi
+run_oracle() {
+  if [[ -n "${PPU_HOST_LOADER:-}" ]]; then
+    : "${PPU_HOST_LIBRARY_PATH:?set the library path for PPU_HOST_LOADER}"
+    "$PPU_HOST_LOADER" --library-path "$PPU_HOST_LIBRARY_PATH" "$out/oracle" "$@"
+  else
+    LD_LIBRARY_PATH="$sdk/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$out/oracle" "$@"
+  fi
+}
+run_oracle | tee "$out/result.log"
 diff -u "$repo/dev/ppu_int8/all_int8_layout_oracle.expected.txt" "$out/result.log"
+for plant in wrong-selector missing-basis; do
+  if run_oracle "--$plant" >"$out/$plant.log" 2>&1; then
+    echo "[all-int8 layout] FAIL: $plant negative survived" >&2
+    exit 1
+  fi
+  grep -q '\[all-int8 layout\] FAIL:' "$out/$plant.log"
+  echo "[all-int8 layout negative] $plant EXPECTED-RED/PASS"
+done
 echo '[all-int8 layout] native SDK host oracle executed; device execution NOT RUN'

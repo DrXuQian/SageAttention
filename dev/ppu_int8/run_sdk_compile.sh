@@ -85,7 +85,8 @@ probe_includes=(
 for target_include in "$sdk"/targets/*/include; do
   probe_includes+=("-I$target_include")
 done
-"$sdk/bin/hgcc" \
+for probe in bridge requant; do
+  "$sdk/bin/hgcc" \
   --forward-unknown-to-host-compiler --forward-unknown-to-host-linker \
   -arch=ppu_10 -x hg -DSWITCH_TO_HGGCRT \
   -Xcompiler -ftemplate-depth=8192 -Xllvm -ppu-max-vreg-count=256 \
@@ -93,11 +94,12 @@ done
   -DCUTLASS_USE_PACKED_TUPLE=1 -DCUTE_USE_PACKED_TUPLE=1 \
   -DUSE_PPU=1 -DUSE_AIU=1 -O3 -std=c++17 --use_fast_math -fPIC \
   "${probe_includes[@]}" \
-  -c "$repo/dev/ppu_int8/bridge_codegen_probe.cu" \
-  -o "$out/bridge_codegen_probe.o" \
-  >"$out/bridge-codegen-build.log" 2>&1
-"$sdk/bin/hgobjdump" --dump-isa "$out/bridge_codegen_probe.o" \
-  >"$out/bridge-codegen-isa.log"
+  -c "$repo/dev/ppu_int8/${probe}_codegen_probe.cu" \
+  -o "$out/${probe}_codegen_probe.o" \
+  >"$out/$probe-codegen-build.log" 2>&1
+  "$sdk/bin/hgobjdump" --dump-isa "$out/${probe}_codegen_probe.o" \
+    >"$out/$probe-codegen-isa.log"
+done
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" \
   "$out/bridge-codegen-isa.log"
 python "$repo/dev/ppu_int8/check_bridge_codegen.py" --shipping \
@@ -110,6 +112,18 @@ for plant in floating-mma missing-specialization; do
     exit 1
   fi
   grep -q '\[all-int8 ISA\] FAIL:' "$out/all-int8-$plant.log"
+done
+
+python "$repo/dev/ppu_int8/check_requant_codegen.py" \
+  --probe "$out/requant-codegen-isa.log" --out "$out/requant-probe.json"
+for plant in scalar-clamp extra-shuffle; do
+  if python "$repo/dev/ppu_int8/check_requant_codegen.py" \
+      --probe "$out/requant-codegen-isa.log" --plant "$plant" \
+      >"$out/requant-$plant.log" 2>&1; then
+    echo "[PPU Sage SDK] FAIL: requant negative survived: $plant" >&2
+    exit 1
+  fi
+  grep -q '\[requant ISA\] FAIL:' "$out/requant-$plant.log"
 done
 
 sha256sum "$extension" | tee "$out/binary.sha256"
