@@ -6,10 +6,6 @@
 #include "attn_ppu.h"
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, module) {
-  module.def("qk_int8_sv_int8_accum_f32_attn", &qk_int8_sv_int8_accum_f32_attn_ppu,
-             "PPU S8 QK / U8xS8 PV, per-block FP32 dequantized accumulation");
-  module.def("quant_value_int8", &quant_value_int8_ppu,
-             "PPU per-K64/channel V quantization with fused block transpose");
   module.def(
       "qk_int8_sv_f16_accum_f32_attn",
       &qk_int8_sv_f16_accum_f32_attn_ppu,

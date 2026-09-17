@@ -27,6 +27,7 @@ class ProfileContract(unittest.TestCase):
                          (1, 56, 56, 73774, 128))
         self.assertEqual(plan["sage_expected_grid"], [577, 56, 1])
         self.assertEqual(plan["sage_expected_threads"], 128)
+        self.assertEqual(plan["sage_kernel"], "qk_int8_pv_f16_kernel")
         self.assertEqual(plan["input_dtype"], "bf16")
         self.assertFalse(plan["causal"])
         self.assertFalse(plan["compile"])

@@ -3,7 +3,7 @@
 
 Adapted from the uploaded agent's profiling patch, without its kernel changes.
 No build, backend fallback, warmup, or benchmark timing loop. Setup kernels can
-also appear in ACU; select qk_int8_pv_kernel for the Sage core counters.
+also appear in ACU; select qk_int8_pv_f16_kernel for the Sage core counters.
 """
 from __future__ import annotations
 
@@ -22,8 +22,6 @@ def arguments(argv=None):
     parser.add_argument("--causal", action="store_true")
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--arm", choices=("sage", "flash", "both"), default="sage")
-    parser.add_argument("--pv", choices=("int8", "fp16"), default="int8",
-                        help="Sage PV type; fp16 retains the previous measured arm")
     parser.add_argument("--seed", type=int, default=0x5A6E)
     parser.add_argument("--describe", action="store_true", help="Print plan without importing Torch")
     args = parser.parse_args(argv)
@@ -52,7 +50,7 @@ def main(argv=None):
                 smooth_k=False, arms=arms, core_launches_per_arm=args.iters,
                 warmup=0, compile=False, device_ordinal=args.device, seed=args.seed,
                 sage_expected_grid=[(args.seq + 127) // 128, args.heads, args.batch],
-                sage_expected_threads=128, sage_kernel="qk_int8_pv_kernel", sage_pv=args.pv,
+                sage_expected_threads=128, sage_kernel="qk_int8_pv_f16_kernel",
                 scope="profile only; not a new numerical correctness verdict")
     print("[profile-target plan] " + json.dumps(plan), flush=True)
     if args.describe:
@@ -83,23 +81,13 @@ def main(argv=None):
                              device="cuda", dtype=torch.float32)
             ks = torch.empty((args.batch, args.heads, (args.seq + 63) // 64),
                              device="cuda", dtype=torch.float32)
-            if args.pv == "int8":
-                if not hasattr(sage, "quant_value_int8"):
-                    raise RuntimeError("installed Sage wheel lacks INT8 PV; install the all-INT8 wheel or use --pv fp16")
-                vh = torch.empty((args.batch, args.heads, (args.seq + 63) // 64, args.head_dim, 64),
-                                 device="cuda", dtype=torch.int8)
-                vs = torch.empty(vh.shape[:-1], device="cuda", dtype=torch.float32)
-            else:
-                vh = torch.empty(shape, device="cuda", dtype=torch.float16)
+            vh = torch.empty(shape, device="cuda", dtype=torch.float16)
             no_mean = torch.empty(0, device="cuda", dtype=torch.bfloat16)
             # One preparation, not one per attention invocation. ACU may report
             # these separately; they are not part of the Sage core kernel.
             sage.quant_per_warp_int8(q, qi, qs, 128, 32, 0)
             sage.quant_per_block_int8(k, no_mean, ki, ks, 64, 0)
-            if args.pv == "int8":
-                sage.quant_value_int8(v, vh, vs, 0)
-            else:
-                vh.copy_(v)
+            vh.copy_(v)
         torch.cuda.synchronize()
         for _ in range(args.iters):
             for arm in arms:
@@ -107,12 +95,8 @@ def main(argv=None):
                     backends[arm].fwd(q, k, v, output[arm], None, 0.0, scale,
                                       args.causal, -1, -1, 0.0, False, None)
                 else:
-                    if args.pv == "int8":
-                        sage.qk_int8_sv_int8_accum_f32_attn(qi, ki, vh, output[arm], qs, ks, vs,
-                                                         0, int(args.causal), 2, scale, 0)
-                    else:
-                        sage.qk_int8_sv_f16_accum_f32_attn(qi, ki, vh, output[arm], qs, ks,
-                                                        0, int(args.causal), 2, scale, 0)
+                    sage.qk_int8_sv_f16_accum_f32_attn(qi, ki, vh, output[arm], qs, ks,
+                                                     0, int(args.causal), 2, scale, 0)
         torch.cuda.synchronize()
     print(f"[profile-target] COMPLETE arms={','.join(arms)} "
           f"core_launches_per_arm={args.iters}; no device correctness verdict", flush=True)

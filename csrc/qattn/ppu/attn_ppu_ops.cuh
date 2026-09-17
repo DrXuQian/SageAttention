@@ -15,10 +15,8 @@
 #include <cute/arch/mma_ppu0010.hpp>
 #include <cute/numeric/integral_constant.hpp>
 #include <cutlass/numeric_types.h>
-#include <cutlass/numeric_conversion.h>
 
 #include "attn_ppu_layout.cuh"
-#include "attn_ppu_int8_layout.cuh"
 
 namespace sageattention::ppu {
 
@@ -73,45 +71,6 @@ __device__ __forceinline__ void mma_f16f16f32(
       d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7],
       a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3],
       d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7]);
-}
-
-__device__ __forceinline__ void mma_u8s8s32(
-    int32_t (&d)[8], uint32_t const (&a)[4], uint32_t const (&b)[4]) {
-  auto *du = reinterpret_cast<uint32_t *>(d);
-  cute::PPU0010_16x16x32_S32U8S8S32_TN::fma(
-      du[0], du[1], du[2], du[3], du[4], du[5], du[6], du[7],
-      a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3],
-      du[0], du[1], du[2], du[3], du[4], du[5], du[6], du[7]);
-}
-
-// Keep the original FP32 multiply and round-to-nearest-even conversion.
-// actlize combines the integer clamp and byte assembly into saturated U8
-// packing; no magic-bias FMA (which would change rounding at half-code ties).
-__device__ __forceinline__ uint32_t pack_probability_u8(
-    float const (&probability)[4]) {
-  cutlass::Array<float, 4> scaled;
-#pragma unroll
-  for (int i = 0; i < 4; ++i) scaled[i] = probability[i] * 255.0f;
-  auto packed = cutlass::NumericArrayConverter<uint8_t, float, 4>{}(scaled);
-  return reinterpret_cast<uint32_t const &>(packed);
-}
-
-// Each source word packs one C-layout row's four local columns. The two-stage
-// butterfly transposes the bytes within each four-lane row-peer group: two
-// exchanges and two byte permutations, without FP MMA or shared staging.
-__device__ __forceinline__ void probability_to_u8_operand(
-    uint32_t (&dst)[4], uint32_t const (&left)[2], uint32_t const (&right)[2]) {
-  int const lane = int(threadIdx.x) & 31;
-  unsigned const pair_selector = layout::probability_pair_selector(lane);
-  unsigned const quad_selector = layout::probability_quad_selector(lane);
-#pragma unroll
-  for (int word = 0; word < 4; ++word) {
-    uint32_t const source = (word & 1) ? right[word / 2] : left[word / 2];
-    uint32_t const paired = __byte_perm(source,
-        __shfl_xor_sync(0xffffffffu, source, 1), pair_selector);
-    dst[word] = __byte_perm(paired,
-        __shfl_xor_sync(0xffffffffu, paired, 2), quad_selector);
-  }
 }
 
 // CLayout and ALayout are different physical views on PPU0010.  Put the score

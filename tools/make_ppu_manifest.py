@@ -28,8 +28,8 @@ def main():
     resources = args.resources.read_text()
     regs = [int(x) for x in re.findall(r"vreg_number:(\d+)", resources)]
     stacks = [int(x) for x in re.findall(r"STACK SIZE:(\d+)", resources)]
-    if len(regs) != 48 or len(stacks) != 48 or any(stacks):
-        raise RuntimeError("PPU resource evidence must cover all 48 dense/quant/V kernels, no spills")
+    if len(regs) != 28 or len(stacks) != 28 or any(stacks):
+        raise RuntimeError("PPU resource evidence must cover all 28 dense/quant kernels, no spills")
     git = lambda *words: subprocess.check_output(["git", *words], cwd=root, text=True).strip()
     sources = ["setup_ppu.py", "tools/ppu_native_link.py"]
     sources += [str(p.relative_to(root)) for p in sorted((root / "csrc/qattn/ppu").iterdir())
@@ -51,8 +51,6 @@ def main():
         },
         "resource_evidence": {"specializations": len(regs), "max_vector_registers": max(regs),
                               "nonzero_private_frames": [], "scope": "local hgobjdump; no device run"},
-        "attention_pv_modes": ["fp16", "int8"],
-        "all_int8_device_admission": "NOT RUN; execute dev/ppu_int8/device_all_int8.py before timing",
         "required_ppu_runtime_libraries": [soname, "libhggc.so", "libalippu.so"],
         "native_runtime_linkage": linkage,
         "source_sha256": {s: hashlib.sha256((root / s).read_bytes()).hexdigest() for s in sources},
