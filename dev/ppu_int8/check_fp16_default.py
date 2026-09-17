@@ -58,6 +58,25 @@ def run_route(*, named=False, layout="HND", plant=None):
 
 
 class Contract(unittest.TestCase):
+    def test_no_retired_ppu_entrypoints(self):
+        # INT8 QK remains required. Reject only retired integer-SV producers
+        # and consumers, not every occurrence of the string "int8".
+        sources = (
+            "sageattention/core.py", "sageattention/ppu_compile.py",
+            "csrc/qattn/ppu/attn_ppu.h", "csrc/qattn/ppu/pybind_ppu.cpp",
+            "csrc/qattn/ppu/qk_int_sv_f16_ppu.cu",
+            "csrc/qattn/ppu/quant_ppu.cu",
+        )
+        retired = (
+            "sageattn_qk_int8_pv_int8_ppu", "qk_int8_sv_int8",
+            "quantize_value_int8_kernel", "quant_per_block_int8_permuted_k",
+        )
+        for source in sources:
+            text = (ROOT / source).read_text()
+            for symbol in retired:
+                with self.subTest(source=source, symbol=symbol):
+                    self.assertNotIn(symbol, text)
+
     def test_public_and_named_paths(self):
         for named in (False, True):
             for layout in ("HND", "NHD"):

@@ -3,14 +3,14 @@
 Main's PPU algorithm is **INT8 QK / FP16 PV / FP32 accumulation**, including
 the public `sageattn()` default and the benchmark/profile targets. Its device
 sources and Python compute route are restored exactly to `0e30f92`.
-All-INT8 PV and its requant optimizations are isolated on
-[`experiment/ppu-pv-int8`](https://github.com/DrXuQian/SageAttention/tree/experiment/ppu-pv-int8).
-That experimental branch is not a new default or a model-quality admission.
+The INT8-PV experiment is retired. Its kernel, extra quantizers, tuning
+entrypoints and candidate artifacts are no longer supported or distributed.
+BF16 input/output remains supported; the SV multiply itself is FP16, not BF16.
 
 The artifact branch's default installer again selects **post1**, the existing
-FP16-PV wheel with the native HGGC 13 runtime fix. Post2 remains available only
-through `install.sh --experimental-pv-int8`; it is not the latest requant build.
-Pulling source does not change an already-installed post2 wheel. Run the default
+FP16-PV wheel with the native HGGC 13 runtime fix. The INT8-PV post2 wheel and
+its installer option are removed. Pulling source does not change an
+already-installed post2 wheel. Run the default
 installer and restart Python/ComfyUI to restore its FP16-PV default as well.
 
 This port follows the shipping SM80 FP32-accumulation algorithm in
