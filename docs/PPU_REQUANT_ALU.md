@@ -5,6 +5,19 @@ This is **local native code generation**, not a new PPU device timing or
 correctness verdict. The original FP16-PV API and all its native instruction
 streams remain unchanged. No candidate wheel has been published by this work.
 
+This work lives on `experiment/ppu-pv-int8`; main retains FP16 PV. The next
+packing investigation is an inverse-dequant / magic-bias byte extraction, not
+an assumption that bit reinterpretation replaces numeric rounding. It must
+preserve `RN_float(p * 255)` then RNE, masked zero, and all four packed bytes.
+Combining the multiply and bias in an FMA changes threshold rounding and is
+not admitted. Keep threshold-neighbour and byte-map negatives with any candidate.
+
+The native RTX 5070 INT8-QK / FP8-PV path may be used as an instruction-structure
+reference, explicitly not a same-precision performance comparison. Normalize
+matrix work and separate P packing, PV accumulator conversion/scaling, register
+retile, and control. Different integer / floating MMA geometries cannot be
+compared by raw instruction count alone.
+
 ## Scope fixed before comparison
 
 Only two byte-level seams change:

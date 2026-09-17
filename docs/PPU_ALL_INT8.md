@@ -1,5 +1,17 @@
 # PPU QK/PV eight-bit forward contract
 
+This is the opt-in `experiment/ppu-pv-int8` branch, not the mainline algorithm.
+Main retains INT8 QK / FP16 PV. This branch preserves the integer-PV prototype,
+its post2 baseline, and the locally verified requant/byte-permutation reduction;
+the latter has no PPU timing or model-quality admission yet.
+
+Upstream scope: the original SageAttention paper's Table 6 includes all-INT8
+SAGEAttn-vB/vT and section 4.5 selects them only on sufficiently accurate layers.
+The current Sage2 snapshot inspected for the NVIDIA comparison does not expose
+a ready INT8-PV entry point. These are different statements; neither FP16 nor
+FP8 PV is an all-INT8 reference. See the
+[original paper](https://arxiv.org/html/2410.02367v4#S4.S5).
+
 Baseline: source `0e30f92`, QK S8xS8->S32, PV F16xF16->F32.
 The upstream SM80 path uses this mixed-precision algorithm; upstream SM89/90
 also supplies S8 QK + FP8 PV. The latter is not the current PPU implementation.
@@ -104,13 +116,16 @@ shipping device-symbol/ISA checks separately.
 
 ## Box: install, admit, then profile
 
-The `ppu-wheels` artifact branch's `release.json` binds the post2 wheel, source
-SHA and native hash. It keeps post1 for rollback. The new default PPU API uses
-INT8 PV; `sageattn_qk_int8_pv_fp16_ppu` remains the named old precision mode.
+The artifact branch retains post2 for this experiment, while its default
+`release.json` / installer selects the mainline post1 FP16-PV wheel. Post2 does
+NOT contain the later requant ALU reduction. Select the experimental release
+explicitly; never infer the algorithm from the package name alone. On this
+experimental source branch the default PPU API uses INT8 PV;
+`sageattn_qk_int8_pv_fp16_ppu` remains the named old precision mode.
 
 ```bash
 git -C /workspace/ppu-wheel-sage pull --ff-only
-bash /workspace/ppu-wheel-sage/install.sh
+bash /workspace/ppu-wheel-sage/install.sh --experimental-pv-int8
 git pull --ff-only
 PROFILE=1 bash tools/run_ppu_all_int8_box.sh
 ```
